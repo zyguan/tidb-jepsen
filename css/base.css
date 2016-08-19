@@ -27,12 +27,14 @@ body {
   font-size: 14pt;
   text-align: justify;
   text-justify: inter-word;
+  line-height: 125%;
   padding: 1em;
   background: #FFF;
   color: #3D3123;
 }
 
 h1, h2, h3 {
+  line-height: 100%;
   font-weight: bold;
   font-family: "museo_slab500", sans-serif;
   margin-top: 1em;
@@ -64,7 +66,9 @@ p:first-child {
 
 ul {
   list-style-type: square;
-
+}
+li {
+  margin-left: 1em;
 }
 
 td {
