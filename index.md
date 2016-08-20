@@ -3,7 +3,7 @@ title: Jepsen
 layout: default
 ---
 
-<iframe width="520" height="293" src="http://www.ustream.tv/embed/recorded/61443262?html5ui" allowfullscreen webkitallowfullscreen scrolling="no" frameborder="0" style="border: 0 none transparent;"></iframe>
+<iframe width="520" height="293" src="https://www.youtube.com/embed/dE3KT7hHkKY" frameborder="0" allowfullscreen></iframe>
 
 ## Distributed Systems Safety Analysis
 
