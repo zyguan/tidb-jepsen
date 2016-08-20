@@ -81,6 +81,19 @@ td:last-child {
   padding-right: 0;
 }
 
+a {
+  color: #710000;
+  text-decoration: none;
+}
+
+a:visited {
+  color: #910B0B;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
 .main {
   position: relative;
   width: 640px;
@@ -102,15 +115,9 @@ nav {
 }
 
 nav a {
-  color: #890000;
-  text-decoration: none;
   display: block;
   line-height: 140%;
   font-family: "museo_slab500", sans-serif;
-}
-
-nav a:hover {
-  text-decoration: underline;
 }
 
 .sheet {
