@@ -5,7 +5,7 @@ layout: default
 
 In addition to [sponsored analyses](/analyses.html), Jepsen offers consulting
 services in distributed systems design and testing, on an hourly or weekly
-basis. We've provided:
+basis. We can help with:
 
 - Internal tech talks and conference keynotes on Jepsen tests
 - Design discussions for in-house databases and queues
