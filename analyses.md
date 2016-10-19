@@ -30,7 +30,7 @@ published:
 ## Get Tested
 
 Would you like Jepsen to analyze your distributed system? Contact <a
-href="aphyr@jepsen.io">aphyr@jepsen.io</a> for pricing.
+href="mailto:aphyr@jepsen.io">aphyr@jepsen.io</a> for pricing.
 
 Analyses generally take one to four months, depending on scope, and are bound
 by our [research ethics policy](/ethics.html). We work with your team to
