@@ -23,6 +23,11 @@ themselves.
 
 ## Recent work
 
+- We collaborated with MongoDB to integrate Jepsen into their [CI
+  system](https://evergreen.mongodb.com/build/mongodb_mongo_master_ubuntu1404_jepsen_bf4385aed5e528a8cf1edb7955c8c2164dda04f0_16_10_28_14_33_06).
+MongoDB added support for [linearizable
+reads](https://docs.mongodb.com/master/release-notes/3.4/#linearizable-read-concern) in October 2016.
+
 - Research for Crate.io led to cases of [dirty reads, replica divergence, and
   lost updates](https://github.com/elastic/elasticsearch/issues/20031) in
   Elasticsearch.
