@@ -9,11 +9,12 @@ href="mailto:aphyr@jepsen.io">aphyr@jepsen.io</a> for scheduling and pricing.
 ## Distributed Systems Fundamentals
 
 A two day lecture & discussion class for engineers who need an overview of
-distributed systems concepts and techniques, from papers to production. We
-[cover](https://github.com/aphyr/distsys-class) the basics of nodes and
+distributed systems concepts and techniques, from papers to production.  [We
+cover](https://github.com/aphyr/distsys-class) the basics of nodes and
 networks, common network protocols, clocks, availability, consistency, and a
 spectrum of distributed algorithms, followed by a discussion of latency scales,
-engineering patterns, and running services in production.
+engineering patterns, and running services in production. We recommend ~15-30
+participants per class to encourage discussion, though any size is feasible.
 
 Requirements:
 
