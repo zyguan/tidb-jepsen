@@ -117,10 +117,10 @@ and money. Here's what I promise:
   drops data, I won't claim otherwise. If I feel a client's requested edits
   compromise the accuracy of the analysis, I can veto publication.
 
-- To protect clients, if a client feels my analysis is inaccurate or wouldn't
-  be wise to release, they can veto or delay publication. No matter what, the
-  analysis and code will still be available to the client, so they can work on
-  fixing any issues privately.
+- Once I've prepared a written analysis, the client may defer publication by up
+  to three months. This gives the client a chance to understand the faults I've
+  identified, attempt to fix bugs, update documentation, and deploy fixes to
+  users.
 
 - To prevent readers from assuming the worst in the event that I don't publish,
   I will not disclose the existence of a contract without client consent.
