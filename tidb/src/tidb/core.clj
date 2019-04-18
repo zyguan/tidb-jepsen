@@ -68,7 +68,7 @@
 (def workload-options-expected-to-pass
   "Workload options restricted to only those we expect to pass."
   (-> (util/map-vals #(assoc %
-                             :auto-retry        [false]
+                             :auto-retry        [true]
                              :auto-retry-limit  [0])
                      workload-options)))
 
@@ -206,6 +206,7 @@
             :nemesis    (:nemesis nemesis)
             :generator  gen
             :plot       plot-spec
+            :concurrency 10
             :checker    (checker/compose
                           {:perf        (checker/perf)
                            :clock-skew  (checker/clock-plot)

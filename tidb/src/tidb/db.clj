@@ -145,9 +145,25 @@
       :--config    db-config-file
       :--log-file  db-log-file)))
 
+(defn wait-replicas
+  "Wait a given region's replicas reachs n"
+  [pd-endpoint count]
+  (with-retry [tries 1000]
+    (c/exec :bash :-c (str "curl -sl " pd-endpoint
+                      "/pd/api/v1/region/key/abc"
+                      " | grep \"store_id\" |wc -l"
+                      " | { read count; [ \"$count\" -gt " count " ]; }"))
+    (catch Throwable e
+      (info "Waiting for replicas")
+      (if (pos? tries)
+          (do (Thread/sleep 1000)
+              (retry (dec tries)))
+          (throw+ {:type :wait-replicas
+                   :pd-endpoint  pd-endpoint})))))
+
 (defn wait-page
   "Waits for a status page to become available"
-  [url]
+  [url node]
   (with-retry [tries 20]
     (c/exec :curl :--fail url)
     (catch Throwable e
@@ -156,17 +172,19 @@
           (do (Thread/sleep 1000)
               (retry (dec tries)))
           (throw+ {:type  :wait-page
-                   :url   url})))))
+                   :url   url
+                   :name  (name node)})))))
 
 (defn start!
   "Starts all daemons, waiting for each one's health page in turn."
   [test node]
   (start-pd! test node)
-  (wait-page (str "http://127.0.0.1:" client-port "/health"))
+  (wait-page (str "http://127.0.0.1:" client-port "/health") node)
   (start-kv! test node)
-  (wait-page "http://127.0.0.1:20180/status")
+  (wait-page "http://127.0.0.1:20180/status" node)
+  (wait-replicas "n1:2379" 2)
   (start-db! test node)
-  (wait-page "http://127.0.0.1:10080/status"))
+  (wait-page "http://127.0.0.1:10080/status" node))
 
 (defn stop-pd! [test node] (cu/stop-daemon! pd-bin pd-pid-file))
 (defn stop-kv! [test node] (cu/stop-daemon! kv-bin kv-pid-file))
@@ -181,8 +199,10 @@
 
 (defn tarball-url
   [url version]
-  (if (nil? url)
-    (str "http://download.pingcap.org/tidb-" version "-linux-amd64.tar.gz")
+  (let [url (if (nil? url)
+        (str "http://download.pingcap.org/tidb-" version "-linux-amd64.tar.gz")
+        url)]
+    (info "Downloading " url)
     url))
 
 (defn install!
@@ -218,6 +238,8 @@
       (c/su
         (info node "tearing down TiDB")
         (stop! test node)
+        ; Set datetime
+        (c/exec :sh :-c "date -s \"$(curl -s --head http://google.com | grep ^Date: | sed 's/Date: //g')\"")
         ; Delete everything but bin/
         (->> (cu/ls tidb-dir)
              (remove #{"bin"})
