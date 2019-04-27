@@ -126,8 +126,14 @@
         [:pause]
         [:clock-skew]
         [:partitions]
+        [:shuffle-leader]
+        [:shuffle-region]
+        [:random-merge]
         ; Combined
-        [:kill :pause :clock-skew :partitions]]
+        [:shuffle-leader :shuffle-region :random-merge]
+        [:kill :pause :clock-skew :partitions]
+        [:shuffle-leader :shuffle-region :random-merge
+         :kill :pause :clock-skew :partitions]]
        (map (fn [faults] (zipmap faults (repeat true))))))
 
 (def plot-spec
