@@ -278,9 +278,9 @@
     (:bad-sched n) (assoc :shuffle-leader true
                           :shuffle-region true
                           :random-merge true)
-    (:partition n) (assoc :partition-one true
-                          :partition-half true
-                          :partition-ring true)))
+    (:partitions n) (assoc :partition-one true
+                           :partition-half true
+                           :partition-ring true)))
 
 (defn nemesis
   "Composite nemesis and generator, given test options."
