@@ -62,9 +62,6 @@
    :monotonic       {:auto-retry        [true false]
                      :auto-retry-limit  [10 0]
                      :use-index         [true false]}
-   :append          {:auto-retry        [true false]
-                     :auto-retry-limit  [10 0]
-                     :read-lock         [nil "FOR UPDATE"]}
    :register        {:auto-retry        [true false]
                      :auto-retry-limit  [10 0]
                      :read-lock         [nil "FOR UPDATE"]
@@ -130,16 +127,17 @@
 (def all-nemeses
   "All nemesis specs to run as a part of a complete test suite."
   (->> [; No faults
-        ; []
+        []
         ; Single faults
-        ; [:kill]
-        ; [:pause]
+        [:kill]
+        [:pause]
         ; [:clock-skew]
         [:partitions]
         [:bad-sched]
+        ; ]
         ; Combined
-        ]
         ; [:kill :pause :clock-skew :partitions :bad-sched]]
+        [:kill :pause :partitions :bad-sched]]
        (map (fn [faults] (zipmap faults (repeat true))))))
 
 (def plot-spec
