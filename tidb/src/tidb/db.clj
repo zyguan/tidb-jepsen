@@ -225,7 +225,6 @@
       (info node "installing TiDB")
       (info (tarball-url test))
       (cu/install-archive! (tarball-url test) tidb-dir)
-      (c/exec :ln :-s (str tidb-bin-dir "/" pdctl-bin) (str "/bin/" pdctl-bin))
       (info "Syncing disks to avoid slow fsync on db start")
       (c/exec :sync))))
 
