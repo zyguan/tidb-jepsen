@@ -68,6 +68,9 @@
                      :use-index         [true false]}
    :set             {:auto-retry        [true false]
                      :auto-retry-limit  [10 0]}
+   :set-cas         {:auto-retry        [true false]
+                     :auto-retry-limit  [10 0]
+                     :read-lock         [nil "FOR UPDATE"]}
    :sequential      {:auto-retry        [true false]
                      :auto-retry-limit  [10 0]}})
 
@@ -253,7 +256,9 @@
 
 (def cli-opts
   "Command line options for tools.cli"
-  [[nil "--nemesis-interval SECONDS"
+  [[nil "--force-reinstall" "Don't re-use an existing TiDB directory"]
+
+    [nil "--nemesis-interval SECONDS"
     "Roughly how long to wait between nemesis operations. Default: 10s."
     :parse-fn parse-long
     :assoc-fn (fn [m k v] (update m :nemesis assoc :interval v))
@@ -318,12 +323,15 @@
     :parse-fn parse-long
     :validate [(complement neg?) "Must not be negative"]]
 
+   [nil "--predicate-read" "If present, try to read using a query over a secondary key, rather than by primary key. Implied by --use-index."
+    :default false]
+
    [nil "--read-lock TYPE"
     "What kind of read locks, if any, should we acquire? Default is none; may
     also be 'update'."
     :default nil
     :parse-fn {"update" "FOR UPDATE"}
-    :validate #{nil "FOR UPDATE"}]
+    :validate [#{nil "FOR UPDATE"} "Should be FOR UPDATE"]]
 
    [nil "--update-in-place"
     "If true, performs updates (on some workloads) in place, rather than

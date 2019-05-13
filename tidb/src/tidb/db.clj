@@ -35,12 +35,14 @@
 (def client-port 2379)
 (def peer-port   2380)
 
-(def tidb-map
-  {"n1" {:pd "pd1" :kv "tikv1"}
-   "n2" {:pd "pd2" :kv "tikv2"}
-   "n3" {:pd "pd3" :kv "tikv3"}
-   "n4" {:pd "pd4" :kv "tikv4"}
-   "n5" {:pd "pd5" :kv "tikv5"} })
+(defn tidb-map
+  "Computes node IDs for a test."
+  [test]
+  (->> (:nodes test)
+       (map-indexed (fn [i node]
+                      [node {:pd (str "pd" (inc i))
+                             :kv (str "kv" (inc i))}]))
+       (into {})))
 
 (defn node-url
   "An HTTP url for connecting to a node on a particular port."
@@ -62,7 +64,8 @@
   \"foo=foo:2380,bar=bar:2380,...\""
   [test]
   (->> (:nodes test)
-       (map (fn [node] (str (get-in tidb-map [node :pd]) "=" (peer-url node))))
+       (map (fn [node] (str (get-in (tidb-map test) [node :pd])
+                            "=" (peer-url node))))
        (str/join ",")))
 
 (defn pd-endpoints
@@ -105,7 +108,7 @@
        :chdir   tidb-dir
        }
       (str "./bin/" pd-bin)
-      :--name                  (get-in tidb-map [node :pd])
+      :--name                  (get-in (tidb-map test) [node :pd])
       :--data-dir              pd-data-dir
       :--client-urls           (str "http://0.0.0.0:" client-port)
       :--peer-urls             (str "http://0.0.0.0:" peer-port)
@@ -166,13 +169,14 @@
 (defn wait-page
   "Waits for a status page to become available"
   [url node]
-  (with-retry [tries 20]
+  (with-retry [delay 1000
+               tries 10] ; 1024 seconds
     (c/exec :curl :--fail url)
     (catch Throwable e
       (info "Waiting for page" url)
       (if (pos? tries)
-          (do (Thread/sleep 1000)
-              (retry (dec tries)))
+          (do (Thread/sleep delay)
+              (retry (* 2 delay) (dec tries)))
           (throw+ {:type  :wait-page
                    :url   url
                    :name  (name node)})))))
@@ -188,9 +192,9 @@
   (start-db! test node)
   (wait-page "http://127.0.0.1:10080/status" node))
 
-(defn stop-pd! [test node] (cu/stop-daemon! pd-bin pd-pid-file))
-(defn stop-kv! [test node] (cu/stop-daemon! kv-bin kv-pid-file))
-(defn stop-db! [test node] (cu/stop-daemon! db-bin db-pid-file))
+(defn stop-pd! [test node] (c/su (cu/stop-daemon! pd-bin pd-pid-file)))
+(defn stop-kv! [test node] (c/su (cu/stop-daemon! kv-bin kv-pid-file)))
+(defn stop-db! [test node] (c/su (cu/stop-daemon! db-bin db-pid-file)))
 
 (defn stop!
   "Stops all daemons"
@@ -200,12 +204,12 @@
   (stop-pd! test node))
 
 (defn tarball-url
-  [url version]
-  (let [url (if (nil? url)
-        (str "http://download.pingcap.org/tidb-" version "-linux-amd64.tar.gz")
-        url)]
-    (info "Downloading " url)
-    url))
+  "Constructs the URL for a tarball; either passing through the test's URL, or
+  constructing one from the version."
+  [test]
+  (or (:tarball-url test)
+      (str "http://download.pingcap.org/tidb-" (:version test)
+           "-linux-amd64.tar.gz")))
 
 (defn install!
   "Downloads archive and extracts it to our local tidb-dir, if it doesn't exist
@@ -219,7 +223,8 @@
   (c/su
     (when (or (:force-reinstall test) (not (cu/exists? tidb-dir)))
       (info node "installing TiDB")
-      (cu/install-archive! (tarball-url (:tarball-url test) (:version test)) tidb-dir)
+      (info (tarball-url test))
+      (cu/install-archive! (tarball-url test) tidb-dir)
       (c/exec :ln :-s (str tidb-bin-dir "/" pdctl-bin) (str "/bin/" pdctl-bin))
       (info "Syncing disks to avoid slow fsync on db start")
       (c/exec :sync))))
@@ -244,10 +249,13 @@
         ; Set datetime
         (c/exec :sh :-c "date -s \"$(curl -s --head http://google.com | grep ^Date: | sed 's/Date: //g')\"")
         ; Delete everything but bin/
-        (->> (cu/ls tidb-dir)
-             (remove #{"bin"})
-             (map (partial str tidb-dir "/"))
-             (c/exec :rm :-rf))))
+        (try+ (->> (cu/ls tidb-dir)
+                   (remove #{"bin"})
+                   (map (partial str tidb-dir "/"))
+                   (c/exec :rm :-rf))
+              (catch [:type :jepsen.control/nonzero-exit, :exit 2] e
+                ; No such dir
+                nil))))
 
     db/LogFiles
     (log-files [_ test node]

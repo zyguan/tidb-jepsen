@@ -205,8 +205,8 @@
    :generator (->> (append-txns {:min-txn-length      1
                                  :max-txn-length      4
                                  :key-count           5
-                                 :max-writes-per-key  10})
+                                 :max-writes-per-key  16})
                    (map (fn [txn] {:type :invoke, :f :txn, :value txn}))
                    gen/seq)
-   :checker (append/checker {:anomalies         [:G2]
+   :checker (append/checker {:anomalies         [:G-single]
                              :additional-graphs [cycle/realtime-graph]})})
