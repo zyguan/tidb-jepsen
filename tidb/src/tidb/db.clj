@@ -458,6 +458,8 @@
       (c/su
         (info node "tearing down TiDB")
         (stop! test node)
+        ; Set datetime
+        (c/exec :sh :-c "date -s \"$(curl -s --head http://google.com | grep ^Date: | sed 's/Date: //g')\"")
         ; Delete everything but bin/
         (try+ (->> (cu/ls tidb-dir)
                    (remove #{"bin"})
