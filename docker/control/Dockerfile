@@ -19,6 +19,8 @@ RUN apt-get -y -q update && \
         wget \
 	vim # not required by jepsen itself, just for ease of use
 
+RUN apt-get install -y curl
+
 RUN wget https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein && \
     mv lein /usr/bin && \
     chmod +x /usr/bin/lein && \
