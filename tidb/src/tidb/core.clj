@@ -344,7 +344,7 @@
     :validate [pos? "Must be positive"]]
 
    ["-v" "--version VERSION" "What version of TiDB should to install"
-    :default "3.0.0-beta.1"]
+    :default "v3.0.0-beta.1"]
 
    [nil "--tarball-url URL" "URL to TiDB tarball to install, has precedence over --version"
     :default nil]])

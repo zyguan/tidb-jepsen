@@ -332,7 +332,7 @@
   constructing one from the version."
   [test]
   (or (:tarball-url test)
-      (str "http://download.pingcap.org/tidb-v" (:version test)
+      (str "http://download.pingcap.org/tidb-" (:version test)
            "-linux-amd64.tar.gz")))
 
 (defn setup-faketime!
