@@ -8,3 +8,5 @@ RUN apt-get install -y openssh-server \
     logrotate man man-db net-tools ntpdate psmisc python rsyslog \
     sudo unzip vim wget apt-transport-https \
     && apt-get remove -y --purge --auto-remove systemd
+
+RUN apt-get install -y curl
