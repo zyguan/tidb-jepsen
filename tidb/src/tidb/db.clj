@@ -420,6 +420,7 @@
               ; If we don't synchronize, KV might explode because PD isn't
               ; fully available
               (jepsen/synchronize test)
+              (Thread/sleep 5000)
 
               (start-wait-kv! test node)
               (jepsen/synchronize test)
@@ -430,8 +431,12 @@
               (wait-for-replica-count node)
               (jepsen/synchronize test)
 
+              (Thread/sleep 5000)
+
               ; OK, now we can start TiDB itself
               (start-wait-db! test node)
+
+              (Thread/sleep 10000)
 
               ; For reasons I cannot explain, sometimes TiDB just... fails to
               ; reach a usable state despite waiting hundreds of seconds to
