@@ -436,7 +436,7 @@
               ; OK, now we can start TiDB itself
               (start-wait-db! test node)
 
-              (Thread/sleep 10000)
+              (Thread/sleep 30000)
 
               ; For reasons I cannot explain, sometimes TiDB just... fails to
               ; reach a usable state despite waiting hundreds of seconds to

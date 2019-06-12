@@ -3,6 +3,6 @@ MAINTAINER jake@apache.org
 
 RUN rm -rf /jepsen
 
-COPY jepsen /jepsen/
+COPY jepsen /jepsen
 RUN if [ -f /jepsen/jepsen/project.clj ]; then cd /jepsen/jepsen && lein install; fi
 RUN if [ -f /jepsen/tidb/project.clj ]; then cd /jepsen/tidb && lein install; fi
