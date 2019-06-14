@@ -20,6 +20,8 @@ exists() {
     type $1 > /dev/null 2>&1
 }
 
+RETRY_COUNT=1
+
 POSITIONAL=()
 while [[ $# -gt 0 ]]
 do
@@ -53,6 +55,12 @@ do
             RUN_AS_DAEMON=1
             shift # past argument
             ;;
+        --retry-count)
+            INFO "Times to retry docker-compose build"
+            RETRY_COUNT="$2"
+            shift # past argument
+            shift # past value
+            ;;
         *)
             POSITIONAL+=("$1")
             ERROR "unknown option $1"
@@ -69,6 +77,7 @@ if [ "$HELP" ]; then
     echo "  --daemon                                              Runs docker-compose in the background"
     echo "  --dev                                                 Mounts dir at host's JEPSEN_ROOT to /jepsen on jepsen-control container, syncing files for development"
     echo "  --compose PATH                                        Path to an additional docker-compose yml config."
+    echo "  --retry-count TIMES                                   Times to retry 'docker-compose build'"
     echo "To provide multiple additional docker-compose args, set the COMPOSE var directly, with the -f flag. Ex: COMPOSE=\"-f FILE_PATH_HERE -f ANOTHER_PATH\" ./up.sh --dev"
     exit 0
 fi
@@ -114,8 +123,28 @@ fi
 exists docker || { ERROR "Please install docker (https://docs.docker.com/engine/installation/)"; exit 1; }
 exists docker-compose || { ERROR "Please install docker-compose (https://docs.docker.com/compose/install/)"; exit 1; }
 
-INFO "Running \`docker-compose build\`"
-docker-compose -f docker-compose.yml $COMPOSE $DEV build
+function docker_compose_build() {
+    INFO "Running \`docker-compose build\`"
+    docker-compose -f docker-compose.yml $COMPOSE $DEV build
+    return $?
+}
+
+if [ "$RETRY_COUNT" ]; then
+    retry=0
+    retry_interval=10
+    until [ ${retry} -ge ${RETRY_COUNT} ]
+    do
+	      docker_compose_build && break
+	      retry=$[${retry}+1]
+	      echo "Retrying [${retry}/${RETRY_COUNT}] in ${retryInterval}(s) "
+	      sleep ${retry_interval}
+    done
+
+    if [ ${retry} -ge ${RETRY_COUNT} ]; then
+        echo "Failed after ${RETRY_COUNT} attempts!"
+        exit 1
+    fi
+fi
 
 INFO "Running \`docker-compose up\`"
 if [ "$RUN_AS_DAEMON" ]; then
