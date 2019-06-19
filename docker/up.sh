@@ -131,7 +131,7 @@ function docker_compose_build() {
 
 if [ "$RETRY_COUNT" ]; then
     retry=0
-    retry_interval=10
+    retry_interval=30
     until [ ${retry} -ge ${RETRY_COUNT} ]
     do
 	      docker_compose_build && break
