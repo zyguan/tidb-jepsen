@@ -195,6 +195,7 @@
           (condp re-find (.getMessage e#)
             #"can not retry select for update statement" ::abort
             #"\[try again later\]" ::abort
+            #"Deadlock" ::abort
             (throw e#)))))
 
 (defmacro with-txn-retries
