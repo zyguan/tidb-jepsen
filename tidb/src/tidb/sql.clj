@@ -184,11 +184,11 @@
   [& body]
   `(try ~@body
         (catch java.sql.SQLTransactionRollbackException e#
-          (if (ends-with? (.getMessage e#) rollback-msg)
+          (if (str/ends-with? (.getMessage e#) rollback-msg)
             ::abort
             (throw e#)))
         (catch java.sql.BatchUpdateException e#
-          (if (ends-with? (.getMessage e#) rollback-msg)
+          (if (str/ends-with? (.getMessage e#) rollback-msg)
             ::abort
             (throw e#)))
         (catch java.sql.SQLException e#
