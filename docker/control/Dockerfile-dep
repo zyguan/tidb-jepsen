@@ -1,4 +1,4 @@
-FROM hub.pingcap.net/cwen/jepsen-control:latest
+FROM hub.pingcap.net/cwen/jepsen-control:dep
 MAINTAINER jake@apache.org
 
 RUN rm -rf /jepsen
