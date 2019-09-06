@@ -44,6 +44,7 @@
     (info :setting-auto-retry-limit (:auto-retry-limit test 10))
     (j/execute! conn ["set @@tidb_retry_limit = ?"
                       (:auto-retry-limit test 10)]))
+  (j/execute! conn ["set @@tidb_txn_mode = 'pessimistic'"])
 
   conn)
 
