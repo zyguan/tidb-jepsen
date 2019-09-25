@@ -22,7 +22,7 @@
   (let [table (table-for table-count k)]
     [f k (case f
            :r (-> conn
-                  (c/query [(str "select (val) from " table " where "
+                  (c/query [(str "select val from " table " where "
                                  (if (or (:use-index test)
                                          (:predicate-read test))
                                    "sk"
