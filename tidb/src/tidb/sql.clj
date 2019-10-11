@@ -45,6 +45,12 @@
     (j/execute! conn ["set @@tidb_retry_limit = ?"
                       (:auto-retry-limit test 10)]))
 
+  (let [mode (if (= (:txn-mode test) "mixed")
+               (if (= 0 (rand-int 2)) "pessimistic" "optimistic")
+               (:txn-mode test))]
+    (info :setting-txn-mode mode)
+    (j/execute! conn [(str "set @@tidb_txn_mode = '" mode "'")]))
+
   conn)
 
 (defn open
@@ -184,11 +190,11 @@
   [& body]
   `(try ~@body
         (catch java.sql.SQLTransactionRollbackException e#
-          (if (= (.getMessage e#) rollback-msg)
+          (if (str/ends-with? (.getMessage e#) rollback-msg)
             ::abort
             (throw e#)))
         (catch java.sql.BatchUpdateException e#
-          (if (= (.getMessage e#) rollback-msg)
+          (if (str/ends-with? (.getMessage e#) rollback-msg)
             ::abort
             (throw e#)))
         (catch java.sql.SQLException e#
