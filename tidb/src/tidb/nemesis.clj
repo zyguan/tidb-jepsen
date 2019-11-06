@@ -160,10 +160,11 @@
      #{:slow-primary}                       (slow-primary-nemesis)
      {:start-partition :start
       :stop-partition  :stop}               (nemesis/partitioner nil)
-     {:reset-clock          :reset
-      :strobe-clock         :strobe
-      :check-clock-offsets  :check-offsets
-      :bump-clock           :bump}          (nt/clock-nemesis)}))
+     ; {:reset-clock          :reset
+     ;  :strobe-clock         :strobe
+     ;  :check-clock-offsets  :check-offsets
+     ;  :bump-clock           :bump}          (nt/clock-nemesis)
+     }))
 
 ; Generators
 
@@ -209,14 +210,14 @@
       (->> test :nodes nemesis/majorities-ring)
       :partition-type :ring))
 
-(defn clock-gen
-	"A mixture of clock operations."
-	[]
-	(->> (nt/clock-gen)
-			 (gen/f-map {:check-offsets  :check-clock-offsets
-									 :reset          :reset-clock
-									 :strobe         :strobe-clock
-									 :bump           :bump-clock})))
+; (defn clock-gen
+; 	"A mixture of clock operations."
+; 	[]
+; 	(->> (nt/clock-gen)
+; 			 (gen/f-map {:check-offsets  :check-clock-offsets
+; 									 :reset          :reset-clock
+; 									 :strobe         :strobe-clock
+; 									 :bump           :bump-clock})))
 
 (defn flip-flop
   "Switches between ops from two generators: a, b, a, b, ..."
@@ -274,7 +275,8 @@
               :partition-half       partition-half-gen
               :partition-ring       partition-ring-gen}
              (op :stop-partition))
-          (opt-mix n {:clock-skew (clock-gen)})]
+          ; (opt-mix n {:clock-skew (clock-gen)})
+          ]
          ; For all options relevant for this nemesis, mix them together
          (remove nil?)
          gen/mix
@@ -290,7 +292,7 @@
   operations."
   [n]
   (->> (cond-> []
-         (:clock-skew n)      (conj :reset-clock)
+         ; (:clock-skew n)      (conj :reset-clock)
          (:pause-pd n)        (conj :resume-pd)
          (:pause-kv n)        (conj :resume-kv)
          (:pause-db n)        (conj :resume-db)

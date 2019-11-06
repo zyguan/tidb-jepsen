@@ -150,7 +150,7 @@
     :shuffle-leader
     :shuffle-region
     :random-merge
-    :clock-skew
+    ; :clock-skew
     ; Special-case generators
     :slow-primary
     :restart-kv-without-pd})
@@ -167,9 +167,9 @@
   "Faults using the internal tidb scheduler"
   [:shuffle-leader :shuffle-region :random-merge])
 
-(def clock-faults
-  "Clock skew issues"
-  [:clock-skew])
+; (def clock-faults
+;   "Clock skew issues"
+;   [:clock-skew])
 
 (defn cartesian-product
   [as bs]
@@ -185,16 +185,16 @@
          (map vector process-faults)
          (map vector network-faults)
          (map vector schedule-faults)
-         (map vector clock-faults)
+         ; (map vector clock-faults)
          ; Compound faults of one class
          [[:kill]
           [:pause]
           [:schedules]]
          ; Clock skew plus other faults
-         (cartesian-product clock-faults
-                            (concat process-faults
-                                    network-faults
-                                    schedule-faults))
+         ; (cartesian-product clock-faults
+                           ;  (concat process-faults
+                           ;          network-faults
+                           ;          schedule-faults))
          ; Schedules plus process & network faults
          (cartesian-product schedule-faults
                             (concat process-faults
@@ -203,7 +203,8 @@
         [(concat process-faults
                  network-faults
                  schedule-faults
-                 clock-faults)])
+                 ; clock-faults
+                 )])
        ; Convert to maps like {:fault-type true}
        (map (fn [faults] (zipmap faults (repeat true))))))
 
@@ -216,12 +217,13 @@
          (map vector process-faults)
          (map vector network-faults)
          (map vector schedule-faults)
-         (map vector clock-faults)
+         ; (map vector clock-faults)
         ; Everything
         [(concat process-faults
                  network-faults
                  schedule-faults
-                 clock-faults)])
+                 ; clock-faults
+                 )])
        ; Convert to maps like {:fault-type true}
        (map (fn [faults] (zipmap faults (repeat true))))))
 
@@ -267,11 +269,12 @@
                :color       "#A0C8E9"
                :start       #{:start-partition}
                :stop        #{:stop-partition}}
-              {:name        "clock"
-               :color       "#A0E9DB"
-               :start       #{:strobe-clock :bump-clock}
-               :stop        #{:reset-clock}
-               :fs          #{:check-clock-offsets}}}})
+              ;{:name        "clock"
+              ; :color       "#A0E9DB"
+              ; :start       #{:strobe-clock :bump-clock}
+              ; :stop        #{:reset-clock}
+              ; :fs          #{:check-clock-offsets}}
+              }})
 
 (defn test
   "Constructs a test from a map of CLI options."
@@ -324,7 +327,7 @@
             :plot       plot-spec
             :checker    (checker/compose
                           {:perf        (checker/perf)
-                           :clock-skew  (checker/clock-plot)
+                           ; :clock-skew  (checker/clock-plot)
                            :workload    (:checker workload)})})))
 
 (defn parse-nemesis-spec
