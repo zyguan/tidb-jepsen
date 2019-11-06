@@ -109,9 +109,9 @@
           ; normally.
           (c/on-nodes test
                       (fn [test node]
-                        (db/setup-faketime! db/pd-bin (if (= node slow-node)
-                                                        0.1
-                                                        1))
+                        ; (db/setup-faketime! db/pd-bin (if (= node slow-node)
+                        ;                                0.1
+                        ;                                1))
                         (db/stop-pd! test node)
                         (db/start-pd! test node)))
 

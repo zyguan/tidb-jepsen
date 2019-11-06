@@ -9,7 +9,7 @@
             [jepsen [core :as jepsen]
                     [control :as c]
                     [db :as db]
-                    [faketime :as faketime]
+                    ; [faketime :as faketime]
                     [util :as util]]
             [jepsen.control.util :as cu]
             [slingshot.slingshot :refer [try+ throw+]]
@@ -335,12 +335,12 @@
       (str "http://download.pingcap.org/tidb-" (:version test)
            "-linux-amd64.tar.gz")))
 
-(defn setup-faketime!
-  "Configures the faketime wrapper for this node, so that the given binary runs
-  at the given rate."
-  [bin rate]
-  (info "Configuring" bin "to run at" (str rate "x realtime"))
-  (c/su (faketime/wrap! (str tidb-bin-dir "/" bin) 0 rate)))
+; (defn setup-faketime!
+;   "Configures the faketime wrapper for this node, so that the given binary runs
+;   at the given rate."
+;   [bin rate]
+;   (info "Configuring" bin "to run at" (str rate "x realtime"))
+;   (c/su (faketime/wrap! (str tidb-bin-dir "/" bin) 0 rate)))
 
 (defn install!
   "Downloads archive and extracts it to our local tidb-dir, if it doesn't exist
@@ -359,20 +359,21 @@
       (cu/install-archive! (tarball-url test) tidb-dir)
       (info "Syncing disks to avoid slow fsync on db start")
       (c/exec :sync))
-    (if-let [ratio (:faketime test)]
-      (do ; We need a special fork of faketime specifically for tikv, which
-          ; uses CLOCK_MONOTONIC_COARSE (not supported by 0.9.6 stock), and
-          ; jemalloc (segfaults on 0.9.7).
-          (faketime/install-0.9.6-jepsen1!)
-          ; Add faketime wrappers
-          (setup-faketime! pd-bin (faketime/rand-factor ratio))
-          (setup-faketime! kv-bin (faketime/rand-factor ratio))
-          (setup-faketime! db-bin (faketime/rand-factor ratio)))
-      (c/cd tidb-bin-dir
-            ; Destroy faketime wrappers, if applicable.
-            (faketime/unwrap! pd-bin)
-            (faketime/unwrap! kv-bin)
-            (faketime/unwrap! db-bin)))))
+    ; (if-let [ratio (:faketime test)]
+    ;   (do ; We need a special fork of faketime specifically for tikv, which
+    ;       ; uses CLOCK_MONOTONIC_COARSE (not supported by 0.9.6 stock), and
+    ;       ; jemalloc (segfaults on 0.9.7).
+    ;       (faketime/install-0.9.6-jepsen1!)
+    ;       ; Add faketime wrappers
+    ;       (setup-faketime! pd-bin (faketime/rand-factor ratio))
+    ;       (setup-faketime! kv-bin (faketime/rand-factor ratio))
+    ;       (setup-faketime! db-bin (faketime/rand-factor ratio)))
+    ;   (c/cd tidb-bin-dir
+    ;         ; Destroy faketime wrappers, if applicable.
+    ;         (faketime/unwrap! pd-bin)
+    ;         (faketime/unwrap! kv-bin)
+    ;         (faketime/unwrap! db-bin)))
+   ))
 
 (defn region-ready?
   "Does the given region have enough replicas?"
