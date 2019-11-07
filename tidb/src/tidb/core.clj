@@ -452,7 +452,10 @@
 
    [nil "--txn-mode MODE" "Which transaction mode the test uses"
     :default "optimistic"
-    :validate [#{"optimistic" "pessimistic" "mixed"} "Must be 'optimistic', 'pessimistic' or 'mixed'"]]])
+    :validate [#{"optimistic" "pessimistic" "mixed"} "Must be 'optimistic', 'pessimistic' or 'mixed'"]]
+
+   [nil "--follower-read" "whether to open follower read"
+    :default false]])
 
 (defn test-all-cmd
   "A command that runs a whole suite of tests in one go."
