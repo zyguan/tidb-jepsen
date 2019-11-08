@@ -51,7 +51,7 @@
     (info :setting-txn-mode mode)
     (j/execute! conn [(str "set @@tidb_txn_mode = '" mode "'")]))
 
-  (if (:follower-read test)
+  (when (:follower-read test)
     (info :setting-follower-read)
     (j/execute! conn [(str "set @@tidb_replica_read = 'follower'")]))
 
