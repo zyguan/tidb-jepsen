@@ -39,7 +39,7 @@
                                :start-pd  (db/start-pd! test node)
                                :start-kv  (db/start-kv! test node)
                                :start-db  (db/start-db! test node)
-                               :kill-pd   (db/stop-pd!  test node)
+                               :kill-pd   (db/stop-pd!  test node)`
                                :kill-kv   (db/stop-kv!  test node)
                                :kill-db   (db/stop-db!  test node)
                                :pause-pd  (cu/signal! db/pd-bin :STOP)

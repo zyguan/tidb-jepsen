@@ -24,7 +24,7 @@
 (def tidb-bin-dir   "/opt/tidb/bin")
 (def pd-bin         "pd-server")
 (def pdctl-bin      "pd-ctl")
-(def kv-bin         "tikv-server")
+(def kv-bin         "unistore-server")
 (def db-bin         "tidb-server")
 (def pd-config-file (str tidb-dir "/pd.conf"))
 (def pd-log-file    (str tidb-dir "/pd.log"))
@@ -32,10 +32,8 @@
 (def pd-pid-file    (str tidb-dir "/pd.pid"))
 (def pd-data-dir    (str tidb-dir "/data/pd"))
 (def kv-config-file (str tidb-dir "/kv.conf"))
-(def kv-log-file    (str tidb-dir "/kv.log"))
 (def kv-stdout      (str tidb-dir "/kv.stdout"))
 (def kv-pid-file    (str tidb-dir "/kv.pid"))
-(def kv-data-dir    (str tidb-dir "/data/kv"))
 (def db-config-file (str tidb-dir "/db.conf"))
 (def db-log-file    (str tidb-dir "/db.log"))
 (def db-slow-file   (str tidb-dir "/slow.log"))
@@ -51,7 +49,7 @@
   (->> (:nodes test)
        (map-indexed (fn [i node]
                       [node {:pd (str "pd" (inc i))
-                             :kv (str "kv" (inc i))}]))
+                             :us (str "us" (inc i))}]))
        (into {})))
 
 (defn node-url
@@ -91,10 +89,10 @@
   []
   (c/su (c/exec :echo (slurp (io/resource "pd.conf")) :> pd-config-file)))
 
-(defn configure-kv!
-  "Writes configuration file for tikv"
+(defn configure-us!
+  "Writes configuration file for unistore"
   []
-  (c/su (c/exec :echo (slurp (io/resource "tikv.conf")) :> kv-config-file)))
+  (c/su (c/exec :echo (slurp (io/resource "kv.conf")) :> kv-config-file)))
 
 (defn configure-db!
   "Writes configuration file for tidb"
@@ -105,7 +103,7 @@
   "Write all config files."
   []
   (configure-pd!)
-  (configure-kv!)
+  (configure-us!)
   (configure-db!))
 
 (defn pd-api-path
@@ -183,21 +181,18 @@
       :--config                pd-config-file)))
 
 (defn start-kv!
-  "Starts the TiKV daemon"
+  "Starts the unistore daemon"
   [test node]
   (c/su
-    (cu/start-daemon!
-      {:logfile kv-stdout
-       :pidfile kv-pid-file
-       :chdir   tidb-dir
-       }
-      (str "./bin/" kv-bin)
-      :--pd             (pd-endpoints test)
-      :--addr           (str "0.0.0.0:20160")
-      :--advertise-addr (str (name node) ":" "20160")
-      :--data-dir       kv-data-dir
-      :--log-file       kv-log-file
-      :--config         kv-config-file)))
+   (cu/start-daemon!
+    {:logfile kv-stdout
+     :pidfile kv-pid-file
+     :chdir   tidb-dir
+     }
+    (str "./bin/" kv-bin)
+    :--config kv-config-file
+    :--pd (pd-endpoints test)
+    :--addr (str (name node) ":" "9191"))))
 
 (defn start-db!
   "Starts the TiDB daemon"
@@ -228,9 +223,9 @@
   (page-ready? (str "http://127.0.0.1:" client-port "/health")))
 
 (defn kv-ready?
-  "Is TiKV ready?"
+  "Is Unistore ready?"
   []
-  (page-ready? "http://127.0.0.1:20180/status"))
+  (page-ready? "http://127.0.0.1:9291/status"))
 
 (defn db-ready?
   "Is TiDB ready?"
@@ -292,10 +287,10 @@
                       (cu/daemon-running? pd-pid-file)  :starting
                       true                              :crashed)))
 
-(defn start-wait-kv!
-  "Starts TiKV, waiting for the health page to come online."
+(defn start-wait-us!
+  "Starts Unistore, waiting for the health page to come online."
   [test node]
-  (restart-loop :kv (start-kv! test node)
+  (restart-loop :us (start-kv! test node)
                 (cond (kv-ready?)                       :ready
                       (cu/daemon-running? kv-pid-file)  :starting
                       true                              :crashed)))
@@ -313,7 +308,6 @@
                              ; script, not the underlying binary
                              (cu/stop-daemon! pd-bin pd-pid-file)
                              (cu/grepkill! pd-bin)))
-
 (defn stop-kv! [test node] (c/su (cu/stop-daemon! kv-bin kv-pid-file)
                                  (cu/grepkill! kv-bin)))
 
@@ -414,7 +408,6 @@
   (reify db/DB
     (setup! [_ test node]
       (c/su
-        (install! test node)
         (configure!)
 
         (try+ (start-wait-pd! test node)
@@ -423,7 +416,7 @@
               (jepsen/synchronize test)
               (Thread/sleep 5000)
 
-              (start-wait-kv! test node)
+              (start-wait-us! test node)
               (jepsen/synchronize test)
 
               ; We have to wait for every region to become totally replicated
@@ -480,7 +473,6 @@
       [db-log-file
        db-slow-file
        db-stdout
-       kv-log-file
        kv-stdout
        pd-log-file
        pd-stdout])))
