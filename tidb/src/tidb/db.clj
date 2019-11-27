@@ -306,13 +306,10 @@
 (defn stop-pd! [test node] (c/su
                              ; Faketime wrapper means we only kill the wrapper
                              ; script, not the underlying binary
-                             (cu/stop-daemon! pd-bin pd-pid-file)
-                             (cu/grepkill! pd-bin)))
-(defn stop-kv! [test node] (c/su (cu/stop-daemon! kv-bin kv-pid-file)
-                                 (cu/grepkill! kv-bin)))
+                             (cu/stop-daemon! pd-bin pd-pid-file)))
+(defn stop-kv! [test node] (c/su (cu/stop-daemon! kv-bin kv-pid-file)))
 
-(defn stop-db! [test node] (c/su (cu/stop-daemon! db-bin db-pid-file)
-                                 (cu/grepkill! db-bin)))
+(defn stop-db! [test node] (c/su (cu/stop-daemon! db-bin db-pid-file)))
 
 (defn stop!
   "Stops all daemons"
