@@ -12,10 +12,13 @@
             [tidb.basic :as basic]
             [clojure.tools.logging :refer :all]))
 
-(defn transfer_value [from to b1 b2 ammout]
-  {:from [from (+ b1 ammout) b1]
-   :to [to (- b2 ammout) b2]
-   :ammout ammout})
+(defn transfer_value [ts from to b1 b2 amount]
+  {:ts     ts
+   :from   [from (+ b1 amount) b1]
+   :to     [to (- b2 amount) b2]
+   :amount amount})
+
+(defn txn_ts [c] (first (c/query c ["select @@tidb_current_ts as ts"] {:row-fn :ts})))
 
 (defrecord BankClient [conn]
   client/Client
@@ -71,10 +74,10 @@
                   (if (:update-in-place test)
                     (do (c/execute! c ["update accounts set balance = balance - ? where id = ?" amount from])
                         (c/execute! c ["update accounts set balance = balance + ? where id = ?" amount to])
-                        (assoc op :type :ok, :value (transfer_value from to b1 b2 amount)))
+                        (assoc op :type :ok :value (transfer_value (txn_ts c) from to b1 b2 amount)))
                     (do (c/update! c :accounts {:balance b1} ["id = ?" from])
                         (c/update! c :accounts {:balance b2} ["id = ?" to])
-                        (assoc op :type :ok :value (transfer_value from to b1 b2 amount))))))))))
+                        (assoc op :type :ok :value (transfer_value (txn_ts c) from to b1 b2 amount))))))))))
 
   (teardown! [_ test])
 
@@ -85,6 +88,9 @@
   [opts]
   (assoc (bank/test)
          :client (BankClient. nil)))
+
+(defn cal-sum-total [history]
+  (apply + (vals (:value (last (filter #(and (= :ok (:type %)) (= :read (:f %))) history))))))
 
 ; One bank account per table
 (defrecord MultiBankClient [conn tbl-created?]
@@ -151,12 +157,23 @@
                   (if (:update-in-place test)
                     (do (c/execute! c [(str "update " from " set balance = balance - ? where id = 0") amount])
                         (c/execute! c [(str "update " to " set balance = balance + ? where id = 0") amount])
-                        (assoc op :type :ok :value (transfer_value from to b1 b2 amount)))
+                        (assoc op :type :ok :value (transfer_value (txn_ts c)  from to b1 b2 amount)))
                     (do (c/update! c from {:balance b1} ["id = 0"])
                         (c/update! c to {:balance b2} ["id = 0"])
-                        (assoc op :type :ok :value (transfer_value from to b1 b2 amount))))))))))
+                        (assoc op :type :ok :value (transfer_value (txn_ts c)  from to b1 b2 amount))))))))))
 
-  (teardown! [_ test])
+  (teardown! [_ test]
+    (if (and (= "n1" (:tidb.sql/node conn)) (not= 100 (cal-sum-total @(:history test))))
+      (try
+        (do
+          (info (slurp "http://n1:10080/mvcc/key/test/accounts1/0"))
+          (info (slurp "http://n1:10080/mvcc/key/test/accounts2/0"))
+          (info (slurp "http://n1:10080/mvcc/key/test/accounts3/0"))
+          (info (slurp "http://n1:10080/mvcc/key/test/accounts4/0"))
+          (info (slurp "http://n1:10080/mvcc/key/test/accounts5/0"))
+          (info (slurp "http://n1:10080/mvcc/key/test/accounts6/0"))
+          (info (slurp "http://n1:10080/mvcc/key/test/accounts7/0")))
+        (catch RuntimeException e))))
 
   (close! [_ test]
     (c/close! conn)))
