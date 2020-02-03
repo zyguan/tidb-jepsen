@@ -166,6 +166,7 @@
     (if (and (= "n1" (:tidb.sql/node conn)) (not= 100 (cal-sum-total @(:history test))))
       (try
         (do
+          (info (slurp "http://n1:10080/mvcc/key/test/accounts0/0"))
           (info (slurp "http://n1:10080/mvcc/key/test/accounts1/0"))
           (info (slurp "http://n1:10080/mvcc/key/test/accounts2/0"))
           (info (slurp "http://n1:10080/mvcc/key/test/accounts3/0"))
