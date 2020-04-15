@@ -119,7 +119,7 @@
                   nil))))))))
 
   (invoke! [this test op]
-    (with-txn op [c conn]
+    (with-txn op [c conn {:isolation (get test :isolation :repeatable-read)}]
       (try
         (case (:f op)
           :read

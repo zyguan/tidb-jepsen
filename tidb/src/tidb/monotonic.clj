@@ -49,7 +49,7 @@
         (c/create-index! conn ["create index cycle_sk_val on cycle (sk, val)"]))))
 
   (invoke! [this test op]
-    (c/with-txn op [c conn]
+    (c/with-txn op [c conn {:isolation (get test :isolation :repeatable-read)}]
     ;(let [c conn]
       (case (:f op)
         :read (let [v (read-keys c test (shuffle (keys (:value op))))]
@@ -208,5 +208,5 @@
                                  :max-writes-per-key  16})
                    (map (fn [txn] {:type :invoke, :f :txn, :value txn}))
                    gen/seq)
-   :checker (append/checker {:anomalies         [:G-single]
+   :checker (append/checker {:anomalies         [(if (= :read-committed (:isolation opts)) :G1 :G-single)]
                              :additional-graphs [cycle/realtime-graph]})})
