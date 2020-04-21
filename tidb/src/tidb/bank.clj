@@ -43,7 +43,7 @@
             (catch java.sql.SQLIntegrityConstraintViolationException e nil))))))
 
   (invoke! [this test op]
-    (with-txn op [c conn]
+    (with-txn op [c conn {:isolation (get test :isolation :repeatable-read)}]
       (try
         (case (:f op)
           :read (->> (c/query c [(str "select * from accounts")])
@@ -122,7 +122,7 @@
     (with-txn op [c conn {:isolation (get test :isolation :repeatable-read)}]
       (try
         (case (:f op)
-          :read
+          :read  ; FIXME: read is not consistency for RC
           (->> (:accounts test)
                (map (fn [x]
                       [x (->> (c/query c [(str "select balance from accounts"
