@@ -284,7 +284,7 @@
   (let [name (str "TiDB " (:version opts)
                   " " (name (:workload opts))
                   (when (:auto-retry opts)
-                    " auto-retry ")
+                    " auto-retry")
                   (when (not= 0 (:auto-retry-limit opts))
                     (str " auto-retry-limit " (:auto-retry-limit opts)))
                   (when (:update-in-place opts)
@@ -295,6 +295,8 @@
                     " predicate-read")
                   (when (:use-index opts)
                      " use-index")
+                  (when (:isolation opts)
+                    (str " isolation " (:isolation opts)))
                   (when-not (= [:interval] (keys (:nemesis opts)))
                     (str " nemesis " (->> (dissoc (:nemesis opts)
                                                    :interval
