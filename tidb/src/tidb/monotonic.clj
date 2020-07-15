@@ -119,7 +119,7 @@
     :max-txn-length       Maximum number of operations per txn
     :max-writes-per-key   Maximum number of operations per key"
   ([opts]
-   (wr-txns opts {:active-keys (vec (range (:key-count opts)))}))
+   (wr-txns opts {:active-keys (vec (range (:key-count opts 5)))}))
   ([opts state]
    (lazy-seq
      (let [min-length           (:min-txn-length opts 0)
