@@ -9,16 +9,13 @@
             [knossos.op :as op]
             [clojure.core.reducers :as r]
             [tidb.sql :as c :refer :all]
-            [tidb.basic :as basic]
+            [tidb.util :as util]
             [clojure.tools.logging :refer :all]))
 
-(defn transfer_value [ts from to b1 b2 amount]
-  {:ts     ts
-   :from   [from (+ b1 amount) b1]
+(defn transfer_value [from to b1 b2 amount]
+  {:from   [from (+ b1 amount) b1]
    :to     [to (- b2 amount) b2]
    :amount amount})
-
-(defn txn_ts [c] (first (c/query c ["select @@tidb_current_ts as ts"] {:row-fn :ts})))
 
 (defrecord BankClient [conn tbl-created?]
   client/Client
@@ -50,7 +47,7 @@
             (catch java.sql.SQLIntegrityConstraintViolationException e nil))))))
 
   (invoke! [this test op]
-    (with-txn op [c conn {:isolation (get test :isolation :repeatable-read)}]
+    (with-txn op [c conn {:isolation (util/isolation-level test)}]
       (try
         (case (:f op)
           :read (->> (c/query c [(str "select * from accounts")])
@@ -81,10 +78,10 @@
                   (if (:update-in-place test)
                     (do (c/execute! c ["update accounts set balance = balance - ? where id = ?" amount from])
                         (c/execute! c ["update accounts set balance = balance + ? where id = ?" amount to])
-                        (assoc op :type :ok :value (transfer_value (txn_ts c) from to b1 b2 amount)))
+                        (assoc op :type :ok :value (transfer_value from to b1 b2 amount)))
                     (do (c/update! c :accounts {:balance b1} ["id = ?" from])
                         (c/update! c :accounts {:balance b2} ["id = ?" to])
-                        (assoc op :type :ok :value (transfer_value (txn_ts c) from to b1 b2 amount))))))))))
+                        (assoc op :type :ok :value (transfer_value from to b1 b2 amount))))))))))
 
   (teardown! [_ test])
 
@@ -140,7 +137,7 @@
                 (assoc op :type :ok, :value)))
 
           :transfer
-          (with-txn op [c conn {:isolation (get test :isolation :repeatable-read)}]
+          (with-txn op [c conn {:isolation (util/isolation-level test)}]
             (let [{:keys [from to amount]} (:value op)
                   from (str "accounts" from)
                   to   (str "accounts" to)
@@ -165,12 +162,13 @@
                     (if (:update-in-place test)
                       (do (c/execute! c [(str "update " from " set balance = balance - ? where id = 0") amount])
                           (c/execute! c [(str "update " to " set balance = balance + ? where id = 0") amount])
-                          (assoc op :type :ok :value (transfer_value (txn_ts c)  from to b1 b2 amount)))
+                          (assoc op :type :ok :value (transfer_value from to b1 b2 amount)))
                       (do (c/update! c from {:balance b1} ["id = 0"])
                           (c/update! c to {:balance b2} ["id = 0"])
-                          (assoc op :type :ok :value (transfer_value (txn_ts c)  from to b1 b2 amount))))))))))
+                          (assoc op :type :ok :value (transfer_value from to b1 b2 amount))))))))))
 
   (teardown! [_ test]
+    ; FIXME: fix hard-code node name 'n1'
     (if (and (= "n1" (:tidb.sql/node conn)) (not= 100 (cal-sum-total @(:history test))))
       (try
         (do
