@@ -53,8 +53,8 @@
             (c/execute! conn [(str "create table " t
                                    " (id int primary key,
                                        tkey int)")])
-            (info "Created table" t))))))
-
+            (info "Created table" t)))
+        (util/fail-enable-preset! test (:async-commit util/fail-presets)))))
 
   (invoke! [this test op]
     (case (:f op)

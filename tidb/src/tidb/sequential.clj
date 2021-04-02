@@ -20,11 +20,12 @@
              [core :as jepsen]
              [generator :as gen]
              [independent :as independent]
-             [util :as util :refer [meh]]]
+             [util :refer [meh]]]
             [clojure.set :as set]
             [clojure.tools.logging :refer :all]
             [tidb.sql :as c :refer :all]
             [tidb.basic :as basic]
+            [tidb.util :as util]
             [knossos.model :as model]
             [knossos.op :as op]
             [clojure.core.reducers :as r]))
@@ -58,7 +59,8 @@
         (doseq [t (table-names table-count)]
           (c/execute! conn [(str "create table if not exists " t
                                  " (tkey varchar(255) primary key)")])
-          (info "Created table" t)))))
+          (info "Created table" t)))
+      (util/fail-enable-preset! test (:async-commit util/fail-presets))))
 
   (invoke! [this test op]
     (let [ks (subkeys (:key-count test) (:value op))]
@@ -75,11 +77,11 @@
              reverse
              (mapv (fn [k]
                      (first
-                       (with-txn-retries
-                         (c/query conn [(str "select tkey from "
-                                             (key->table table-count k)
-                                             " where tkey = ?") k]
-                                  {:row-fn :tkey})))))
+                      (with-txn-retries
+                        (c/query conn [(str "select tkey from "
+                                            (key->table table-count k)
+                                            " where tkey = ?") k]
+                                 {:row-fn :tkey})))))
              (vector (:value op))
              (assoc op :type :ok, :value)))))
 
@@ -151,8 +153,8 @@
   (let [c         (:concurrency opts)
         gen       (gen (/ c 2))
         keyrange (atom {})]
-      {:key-count 5
-       :keyrange  keyrange
-       :client    (SequentialClient. c (atom false) nil)
-       :generator (gen/stagger 1/100 gen)
-       :checker   (checker)}))
+    {:key-count 5
+     :keyrange  keyrange
+     :client    (SequentialClient. c (atom false) nil)
+     :generator (gen/stagger 1/100 gen)
+     :checker   (checker)}))

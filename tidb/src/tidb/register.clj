@@ -2,10 +2,10 @@
   "Single atomic register test"
   (:refer-clojure :exclude [test read])
   (:require [jepsen [client :as client]
-                    [checker :as checker]
-                    [generator :as gen]
-                    [independent :as independent]
-                    [util :refer [meh]]]
+             [checker :as checker]
+             [generator :as gen]
+             [independent :as independent]
+             [util :refer [meh]]]
             [jepsen.checker.timeline :as timeline]
             [jepsen.tests.linearizable-register :as lr]
             [clojure.java.jdbc :as j]
@@ -26,7 +26,7 @@
                                    (:read-lock test))
                               k]))))
 
-(defrecord AtomicClient [conn]
+(defrecord AtomicClient [conn setup-once]
   client/Client
 
   (open! [this test node]
@@ -39,35 +39,38 @@
                          sk   int,
                          val  int)"])
       (when (:use-index test)
-        (c/create-index! conn ["create index test_sk_val on test (sk, val)"]))))
+        (c/create-index! conn ["create index test_sk_val on test (sk, val)"])))
+    (when (compare-and-set! setup-once false true)
+      (util/fail-enable-preset! test (:async-commit util/fail-presets))))
 
   (invoke! [this test op]
     (c/with-error-handling op
       (c/with-txn-aborts op
-        (c/attach-commit-ts conn
-          (j/with-db-transaction [c conn {:isolation (util/isolation-level test)}]
-            (c/attach-start-ts c
-              (let [[id val'] (:value op)]
-                (case (:f op)
-                  :read (assoc op
-                               :type  :ok
-                               :value (independent/tuple id (read c test id)))
+        (c/attach-commit-ts
+         conn
+         (j/with-db-transaction [c conn {:isolation (util/isolation-level test)}]
+           (c/attach-start-ts c
+                              (let [[id val'] (:value op)]
+                                (case (:f op)
+                                  :read (assoc op
+                                               :type  :ok
+                                               :value (independent/tuple id (read c test id)))
 
-                  :write (do (c/rand-init-txn! test c)
-                             (c/execute! c [(str "insert into test (id, sk, val) "
-                                                 "values (?, ?, ?) "
-                                                 "on duplicate key update "
-                                                 "val = ?")
-                                            id id val' val'])
-                             (assoc op :type :ok))
+                                  :write (do (c/rand-init-txn! test c)
+                                             (c/execute! c [(str "insert into test (id, sk, val) "
+                                                                 "values (?, ?, ?) "
+                                                                 "on duplicate key update "
+                                                                 "val = ?")
+                                                            id id val' val'])
+                                             (assoc op :type :ok))
 
-                  :cas (let [[expected-val new-val] val'
-                             v   (read c test id)]
-                         (if (= v expected-val)
-                           (do (c/rand-init-txn! test c)
-                               (c/update! c :test {:val new-val} ["id = ?" id])
-                               (assoc op :type :ok))
-                           (assoc op :type :fail, :error :precondition-failed)))))))))))
+                                  :cas (let [[expected-val new-val] val'
+                                             v   (read c test id)]
+                                         (if (= v expected-val)
+                                           (do (c/rand-init-txn! test c)
+                                               (c/update! c :test {:val new-val} ["id = ?" id])
+                                               (assoc op :type :ok))
+                                           (assoc op :type :fail, :error :precondition-failed)))))))))))
 
   (teardown! [this test])
 
@@ -78,5 +81,5 @@
   [opts]
   (let [w (lr/test (assoc opts :model (model/cas-register 0)))]
     (-> w
-        (assoc :client (AtomicClient. nil))
+        (assoc :client (AtomicClient. nil (atom false)))
         (update :generator (partial gen/stagger 1/10)))))
