@@ -2,7 +2,7 @@
   "Client for transactional workloads."
   (:require [clojure.tools.logging :refer [info]]
             [jepsen [client :as client]
-                    [generator :as gen]]
+             [generator :as gen]]
             [tidb.sql :as c :refer :all]
             [tidb.util :as util]))
 
@@ -42,14 +42,14 @@
 
            :append
            (let [r (c/execute!
-                     conn
-                     [(str "insert into " table
-                           " (id, sk, val) values (?, ?, ?)"
-                           " on duplicate key update val = CONCAT(val, ',', ?)")
-                      k k (str v) (str v)])]
+                    conn
+                    [(str "insert into " table
+                          " (id, sk, val) values (?, ?, ?)"
+                          " on duplicate key update val = CONCAT(val, ',', ?)")
+                     k k (str v) (str v)])]
              v))]))
 
-(defrecord Client [conn val-type table-count]
+(defrecord Client [conn val-type table-count setup-once]
   client/Client
   (open! [this test node]
     (assoc this :conn (c/open node test)))
@@ -63,21 +63,23 @@
                                val " val-type ")")])
         (when (:use-index test)
           (c/create-index! conn [(str "create index " (table-name i) "_sk_val"
-                                      " on " (table-name i) " (sk, val)")])))))
+                                      " on " (table-name i) " (sk, val)")]))))
+    (when (compare-and-set! setup-once false true)
+      (util/fail-enable-preset! test (:async-commit util/fail-presets))))
 
   (invoke! [this test op]
     (let [txn      (:value op)
           use-txn? (< 1 (count txn))]
           ;use-txn? false]
-          (if use-txn?
-            (c/with-txn op [c conn {:isolation (util/isolation-level test)
-                                    :before-hook (partial c/rand-init-txn! test conn)}]
-              (assoc op :type :ok, :value
-                     (mapv (partial mop! c test table-count) txn)))
-            (c/with-error-handling op
-              (c/attach-txn-info conn
-                (assoc op :type :ok, :value
-                       (mapv (partial mop! conn test table-count) txn)))))))
+      (if use-txn?
+        (c/with-txn op [c conn {:isolation (util/isolation-level test)
+                                :before-hook (partial c/rand-init-txn! test conn)}]
+          (assoc op :type :ok, :value
+                 (mapv (partial mop! c test table-count) txn)))
+        (c/with-error-handling op
+          (c/attach-txn-info conn
+                             (assoc op :type :ok, :value
+                                    (mapv (partial mop! conn test table-count) txn)))))))
 
   (teardown! [this test])
 
@@ -92,4 +94,5 @@
   [opts]
   (Client. nil
            (:val-type opts "int")
-           (:table-count opts 7)))
+           (:table-count opts 7)
+           (atom false)))

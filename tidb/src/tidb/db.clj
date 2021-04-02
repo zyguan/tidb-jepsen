@@ -7,10 +7,10 @@
             [dom-top.core :refer [with-retry]]
             [fipp.edn :refer [pprint]]
             [jepsen [core :as jepsen]
-                    [control :as c]
-                    [db :as db]
+             [control :as c]
+             [db :as db]
                     ; [faketime :as faketime]
-                    [util :as util]]
+             [util :as util]]
             [jepsen.control.util :as cu]
             [slingshot.slingshot :refer [try+ throw+]]
             [tidb.sql :as sql]))
@@ -166,61 +166,58 @@
   "Starts the placement driver daemon"
   [test node]
   (c/su
-    (cu/start-daemon!
-      {:logfile pd-stdout
-       :pidfile pd-pid-file
-       :chdir   tidb-dir
-       }
-      (str "./bin/" pd-bin)
-      :--name                  (get-in (tidb-map test) [node :pd])
-      :--data-dir              pd-data-dir
-      :--client-urls           (str "http://0.0.0.0:" client-port)
-      :--peer-urls             (str "http://0.0.0.0:" peer-port)
-      :--advertise-client-urls (client-url node)
-      :--advertise-peer-urls   (peer-url node)
-      :--initial-cluster       (initial-cluster test)
-      :--log-file              pd-log-file
-      :--config                pd-config-file)))
+   (cu/start-daemon!
+    {:logfile pd-stdout
+     :pidfile pd-pid-file
+     :chdir   tidb-dir}
+    (str "./bin/" pd-bin)
+    :--name                  (get-in (tidb-map test) [node :pd])
+    :--data-dir              pd-data-dir
+    :--client-urls           (str "http://0.0.0.0:" client-port)
+    :--peer-urls             (str "http://0.0.0.0:" peer-port)
+    :--advertise-client-urls (client-url node)
+    :--advertise-peer-urls   (peer-url node)
+    :--initial-cluster       (initial-cluster test)
+    :--log-file              pd-log-file
+    :--config                pd-config-file)))
 
 (defn start-kv!
   "Starts the TiKV daemon"
   [test node]
   (c/su
-    (cu/start-daemon!
-      {:logfile kv-stdout
-       :pidfile kv-pid-file
-       :chdir   tidb-dir
-       }
-      (str "./bin/" kv-bin)
-      :--pd             (pd-endpoints test)
-      :--addr           (str "0.0.0.0:20160")
-      :--advertise-addr (str (name node) ":" "20160")
-      :--data-dir       kv-data-dir
-      :--log-file       kv-log-file
-      :--config         kv-config-file)))
+   (cu/start-daemon!
+    {:logfile kv-stdout
+     :pidfile kv-pid-file
+     :chdir   tidb-dir}
+    (str "./bin/" kv-bin)
+    :--pd             (pd-endpoints test)
+    :--addr           (str "0.0.0.0:20160")
+    :--advertise-addr (str (name node) ":" "20160")
+    :--data-dir       kv-data-dir
+    :--log-file       kv-log-file
+    :--config         kv-config-file)))
 
 (defn start-db!
   "Starts the TiDB daemon"
   [test node]
   (c/su
-    (cu/start-daemon!
-      {:logfile db-stdout
-       :pidfile db-pid-file
-       :chdir   tidb-dir
-       }
-      (str "./bin/" db-bin)
-      :--store     (str "tikv")
-      :--path      (pd-endpoints test)
-      :--config    db-config-file
-      :--log-file  db-log-file)))
+   (cu/start-daemon!
+    {:logfile db-stdout
+     :pidfile db-pid-file
+     :chdir   tidb-dir}
+    "/usr/bin/env" "GO_FAILPOINTS=github.com/pingcap/tidb/server/enableTestAPI=return" (str "./bin/" db-bin)
+    :--store     (str "tikv")
+    :--path      (pd-endpoints test)
+    :--config    db-config-file
+    :--log-file  db-log-file)))
 
 (defn page-ready?
   "Fetches a status page URL on the local node, and returns true iff the page
   was available."
   [url]
   (try+
-    (c/exec :curl :--fail url)
-    (catch [:type :jepsen.control/nonzero-exit] _ false)))
+   (c/exec :curl :--fail url)
+   (catch [:type :jepsen.control/nonzero-exit] _ false)))
 
 (defn pd-ready?
   "Is Placement Driver ready?"
@@ -311,8 +308,8 @@
 (defn stop-pd! [test node] (c/su
                              ; Faketime wrapper means we only kill the wrapper
                              ; script, not the underlying binary
-                             (cu/stop-daemon! pd-bin pd-pid-file)
-                             (cu/grepkill! pd-bin)))
+                            (cu/stop-daemon! pd-bin pd-pid-file)
+                            (cu/grepkill! pd-bin)))
 
 (defn stop-kv! [test node] (c/su (cu/stop-daemon! kv-bin kv-pid-file)
                                  (cu/grepkill! kv-bin)))
@@ -352,13 +349,13 @@
   cluster."
   [test node]
   (c/su
-    (when (or (:force-reinstall test)
-              (not (cu/exists? tidb-dir)))
-      (info node "installing TiDB")
-      (info (tarball-url test))
-      (cu/install-archive! (tarball-url test) tidb-dir (:force-reinstall test))
-      (info "Syncing disks to avoid slow fsync on db start")
-      (c/exec :sync))
+   (when (or (:force-reinstall test)
+             (not (cu/exists? tidb-dir)))
+     (info node "installing TiDB")
+     (info (tarball-url test))
+     (cu/install-archive! (tarball-url test) tidb-dir (:force-reinstall test))
+     (info "Syncing disks to avoid slow fsync on db start")
+     (c/exec :sync))
     ; (if-let [ratio (:faketime test)]
     ;   (do ; We need a special fork of faketime specifically for tikv, which
     ;       ; uses CLOCK_MONOTONIC_COARSE (not supported by 0.9.6 stock), and
@@ -415,66 +412,66 @@
   (reify db/DB
     (setup! [_ test node]
       (c/su
-        (install! test node)
-        (configure!)
+       (install! test node)
+       (configure!)
 
-        (try+ (start-wait-pd! test node)
+       (try+ (start-wait-pd! test node)
               ; If we don't synchronize, KV might explode because PD isn't
               ; fully available
-              (jepsen/synchronize test)
-              (Thread/sleep 5000)
+             (jepsen/synchronize test)
+             (Thread/sleep 5000)
 
-              (start-wait-kv! test node)
-              (jepsen/synchronize test)
+             (start-wait-kv! test node)
+             (jepsen/synchronize test)
 
               ; We have to wait for every region to become totally replicated
               ; before starting TiDB: if we start TiDB first, it might take 80+
               ; minutes to converge.
-              (wait-for-replica-count node)
-              (jepsen/synchronize test)
+             (wait-for-replica-count node)
+             (jepsen/synchronize test)
 
-              (Thread/sleep 5000)
+             (Thread/sleep 5000)
 
               ; OK, now we can start TiDB itself
-              (start-wait-db! test node)
+             (start-wait-db! test node)
 
-              (Thread/sleep 30000)
+             (Thread/sleep 30000)
 
               ; For reasons I cannot explain, sometimes TiDB just... fails to
               ; reach a usable state despite waiting hundreds of seconds to
               ; open a connection. I've lowered the await-node timeout, and if
               ; we fail here, we'll nuke the entire setup process and try
               ; again. <sigh>
-              (sql/await-node node)
+             (sql/await-node node)
 
-              (catch [:type :gave-up-waiting-for-replica-count] e
-                (throw+ {:type :jepsen.db/setup-failed}))
+             (catch [:type :gave-up-waiting-for-replica-count] e
+               (throw+ {:type :jepsen.db/setup-failed}))
 
-              (catch [:type :restart-loop-timed-out] e
-                (throw+ {:type :jepsen.db/setup-failed}))
+             (catch [:type :restart-loop-timed-out] e
+               (throw+ {:type :jepsen.db/setup-failed}))
 
-              (catch [:type :connect-timed-out] e
+             (catch [:type :connect-timed-out] e
                 ; sigh
-                (throw+ {:type :jepsen.db/setup-failed}))
+               (throw+ {:type :jepsen.db/setup-failed}))
 
-              (catch java.sql.SQLException e
+             (catch java.sql.SQLException e
                 ; siiiiiiiigh
-                (throw+ {:type :jepsen.db/setup-failed})))))
+               (throw+ {:type :jepsen.db/setup-failed})))))
 
     (teardown! [_ test node]
       (c/su
-        (info node "tearing down TiDB")
-        (stop! test node)
+       (info node "tearing down TiDB")
+       (stop! test node)
         ; Set datetime
         ; (c/exec :sh :-c "date -s \"$(curl -s --head http://baidu.com | grep ^Date: | sed 's/Date: //g')\"")
         ; Delete everything but bin/
-        (try+ (->> (cu/ls tidb-dir)
-                   (remove #{"bin"})
-                   (map (partial str tidb-dir "/"))
-                   (c/exec :rm :-rf))
-              (catch [:type :jepsen.control/nonzero-exit, :exit 2] e
+       (try+ (->> (cu/ls tidb-dir)
+                  (remove #{"bin"})
+                  (map (partial str tidb-dir "/"))
+                  (c/exec :rm :-rf))
+             (catch [:type :jepsen.control/nonzero-exit, :exit 2] e
                 ; No such dir
-                nil))))
+               nil))))
 
     db/LogFiles
     (log-files [_ test node]

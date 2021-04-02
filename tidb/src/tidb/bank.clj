@@ -33,10 +33,10 @@
                           balance bigint not null)"])
         ; pre-split table
         (c/execute! conn [(str "split table accounts by "
-                                (->> (:accounts test)
-                                     (filter even?)
-                                     (map #(str "(" % ")"))
-                                     (str/join ",")))])
+                               (->> (:accounts test)
+                                    (filter even?)
+                                    (map #(str "(" % ")"))
+                                    (str/join ",")))])
         (doseq [a (:accounts test)]
           (try
             (with-txn-retries conn
@@ -44,7 +44,8 @@
                                          :balance (if (= a (first (:accounts test)))
                                                     (:total-amount test)
                                                     0)}))
-            (catch java.sql.SQLIntegrityConstraintViolationException e nil))))))
+            (catch java.sql.SQLIntegrityConstraintViolationException e nil))))
+      (util/fail-enable-preset! test (:async-commit util/fail-presets))))
 
   (invoke! [this test op]
     (with-txn op [c conn {:isolation (util/isolation-level test)
@@ -122,53 +123,54 @@
                                        (:total-amount test)
                                        0)})
                 (catch java.sql.SQLIntegrityConstraintViolationException e
-                  nil))))))))
+                  nil)))))
+        (util/fail-enable-preset! test (:async-commit util/fail-presets)))))
 
   (invoke! [this test op]
-      (try
-        (case (:f op)
-          :read
-          (with-txn op [c conn {:isolation :repeatable-read}]
-            (->> (:accounts test)
-                 (map (fn [x]
-                        [x (->> (c/query c [(str "select balance from accounts"
-                                                 x)]
-                                         {:row-fn :balance})
-                                first)]))
-                 (into (sorted-map))
-                 (assoc op :type :ok, :value)))
+    (try
+      (case (:f op)
+        :read
+        (with-txn op [c conn {:isolation :repeatable-read}]
+          (->> (:accounts test)
+               (map (fn [x]
+                      [x (->> (c/query c [(str "select balance from accounts"
+                                               x)]
+                                       {:row-fn :balance})
+                              first)]))
+               (into (sorted-map))
+               (assoc op :type :ok, :value)))
 
-          :transfer
-          (with-txn op [c conn {:isolation (util/isolation-level test)
-                                :before-hook (partial c/rand-init-txn! test conn)}]
-            (let [{:keys [from to amount]} (:value op)
-                  from (str "accounts" from)
-                  to   (str "accounts" to)
-                  b1 (-> c
-                         (c/query
-                          [(str "select balance from " from
-                                " " (:read-lock test))]
-                          {:row-fn :balance})
-                         first
-                         (- amount))
-                  b2 (-> c
-                         (c/query [(str "select balance from " to
-                                        " " (:read-lock test))]
-                                  {:row-fn :balance})
-                         first
-                         (+ amount))]
-              (cond (neg? b1)
-                    (assoc op :type :fail, :error [:negative from b1])
-                    (neg? b2)
-                    (assoc op :type :fail, :error [:negative to b2])
-                    true
-                    (if (:update-in-place test)
-                      (do (c/execute! c [(str "update " from " set balance = balance - ? where id = 0") amount])
-                          (c/execute! c [(str "update " to " set balance = balance + ? where id = 0") amount])
-                          (assoc op :type :ok :value (transfer_value from to b1 b2 amount)))
-                      (do (c/update! c from {:balance b1} ["id = 0"])
-                          (c/update! c to {:balance b2} ["id = 0"])
-                          (assoc op :type :ok :value (transfer_value from to b1 b2 amount))))))))))
+        :transfer
+        (with-txn op [c conn {:isolation (util/isolation-level test)
+                              :before-hook (partial c/rand-init-txn! test conn)}]
+          (let [{:keys [from to amount]} (:value op)
+                from (str "accounts" from)
+                to   (str "accounts" to)
+                b1 (-> c
+                       (c/query
+                        [(str "select balance from " from
+                              " " (:read-lock test))]
+                        {:row-fn :balance})
+                       first
+                       (- amount))
+                b2 (-> c
+                       (c/query [(str "select balance from " to
+                                      " " (:read-lock test))]
+                                {:row-fn :balance})
+                       first
+                       (+ amount))]
+            (cond (neg? b1)
+                  (assoc op :type :fail, :error [:negative from b1])
+                  (neg? b2)
+                  (assoc op :type :fail, :error [:negative to b2])
+                  true
+                  (if (:update-in-place test)
+                    (do (c/execute! c [(str "update " from " set balance = balance - ? where id = 0") amount])
+                        (c/execute! c [(str "update " to " set balance = balance + ? where id = 0") amount])
+                        (assoc op :type :ok :value (transfer_value from to b1 b2 amount)))
+                    (do (c/update! c from {:balance b1} ["id = 0"])
+                        (c/update! c to {:balance b2} ["id = 0"])
+                        (assoc op :type :ok :value (transfer_value from to b1 b2 amount))))))))))
 
   (teardown! [_ test]
     ; FIXME: fix hard-code node name 'n1'
