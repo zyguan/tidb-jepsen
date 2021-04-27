@@ -284,6 +284,14 @@
       (info (str "init-txn> " stmt))
       (execute! conn [stmt] {:transaction? false}))))
 
+(defn query-txn-info
+  [conn]
+  (-> (query conn ["select @@tidb_last_txn_info info"])
+      (first)
+      (:info)
+      (#(if (empty? %) "{\"start_ts\":0,\"commit_ts\":0}" %))
+      (json/parse-string true)))
+
 (defn attach-start-ts
   [conn op]
   (try
@@ -296,8 +304,8 @@
   [conn op]
   (try
     (if-let [start_ts (get-in op [:txn-info :start_ts])]
-      (let [info (json/parse-string (:info (first (query conn ["select @@tidb_last_txn_info info"]))) true)]
-        (if (= start_ts (:start_ts info))
+      (let [txn-info (query-txn-info conn)]
+        (if (= start_ts (:start_ts txn-info))
             (assoc op :txn-info info)
             op))
       op)
@@ -307,7 +315,7 @@
 (defn attach-txn-info
   [conn op]
   (try
-    (let [info (json/parse-string (:info (first (query conn ["select @@tidb_last_txn_info info"]))) true)]
-      (assoc op :txn-info info))
+    (let [txn-info (query-txn-info conn)]
+      (assoc op :txn-info txn-info))
     (catch Exception e
       (do (info "failed to obtain txn-info:" (.getMessage e)) op))))
