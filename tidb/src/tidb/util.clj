@@ -49,22 +49,22 @@
        (into {})))
 
 (def fail-presets
-  {:async-commit {:tidb {"github.com/pingcap/tidb/store/tikv/prewritePrimaryFail"        "1%return"
-                         "github.com/pingcap/tidb/store/tikv/prewriteSecondaryFail"      "1%return"
-                         "github.com/pingcap/tidb/store/tikv/shortPessimisticLockTTL"    "5%return"
-                         "github.com/pingcap/tidb/store/tikv/twoPCShortLockTTL"          "5%return"
-                         "github.com/pingcap/tidb/store/tikv/commitFailedSkipCleanup"    "5%return"
-                         "github.com/pingcap/tidb/store/tikv/twoPCRequestBatchSizeLimit" "5%return"
-                         "github.com/pingcap/tidb/store/tikv/invalidMaxCommitTS"         "2%return"
-                         "github.com/pingcap/tidb/store/tikv/asyncCommitDoNothing"       "2%return"
-                         "github.com/pingcap/tidb/store/tikv/rpcFailOnSend"              "0.51%return(\"write\")"
-                         "github.com/pingcap/tidb/store/tikv/rpcFailOnRecv"              "0.5%return(\"write\")"
-                         "github.com/pingcap/tidb/store/tikv/noRetryOnRpcError"          "5%return(true)"
-                         "github.com/pingcap/tidb/store/tikv/beforeCommit"               "2%return(\"delay\")->10%return(\"fail\")"
-                         "github.com/pingcap/tidb/store/tikv/doNotKeepAlive"             "10%return"
-                         "github.com/pingcap/tidb/store/tikv/snapshotGetTSAsync"         "1%sleep(100)"}
-                  :tikv {"cm_after_read_key_check"         "1%sleep(100)"
-                         "cm_after_read_range_check"       "1%sleep(100)"
-                         "delay_update_max_ts"             "10%return"
-                         "after_calculate_min_commit_ts"   "2%sleep(100)"
-                         "async_commit_1pc_force_fallback" "2%return"}}})
+  {:async-commit {:tidb {"github.com/pingcap/tidb/store/tikv/prewritePrimaryFail"        "0.1%return"
+                         "github.com/pingcap/tidb/store/tikv/prewriteSecondaryFail"      "0.11%return"
+                         "github.com/pingcap/tidb/store/tikv/shortPessimisticLockTTL"    "0.5%return"
+                         "github.com/pingcap/tidb/store/tikv/twoPCShortLockTTL"          "0.5%return"
+                         "github.com/pingcap/tidb/store/tikv/commitFailedSkipCleanup"    "0.3%return"
+                         "github.com/pingcap/tidb/store/tikv/twoPCRequestBatchSizeLimit" "0.1%return"
+                         "github.com/pingcap/tidb/store/tikv/invalidMaxCommitTS"         "0.1%return"
+                         "github.com/pingcap/tidb/store/tikv/asyncCommitDoNothing"       "0.1%return"
+                         "github.com/pingcap/tidb/store/tikv/rpcFailOnSend"              "0.005%return(\"write\")"
+                         "github.com/pingcap/tidb/store/tikv/rpcFailOnRecv"              "0.005%return(\"write\")"
+                         "github.com/pingcap/tidb/store/tikv/noRetryOnRpcError"          "0.01%return(true)"
+                         "github.com/pingcap/tidb/store/tikv/beforeCommit"               "0.1%return(\"delay\")->0.1%return(\"fail\")"
+                         "github.com/pingcap/tidb/store/tikv/doNotKeepAlive"             "0.1%return"
+                         "github.com/pingcap/tidb/store/tikv/snapshotGetTSAsync"         "0.1%sleep(100)"}
+                  :tikv {"cm_after_read_key_check"         "0.01%sleep(100)"
+                         "cm_after_read_range_check"       "0.01%sleep(100)"
+                         "delay_update_max_ts"             "0.01%return"
+                         "after_calculate_min_commit_ts"   "0.02%sleep(100)"
+                         "async_commit_1pc_force_fallback" "0.02%return"}}})
