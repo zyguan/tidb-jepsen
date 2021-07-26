@@ -152,7 +152,7 @@
 
     (setup-hostfile!)
 
-    (maybe-update!)
+    ; (maybe-update!)
 
     (c/su
       ; Packages!
