@@ -29,7 +29,7 @@
                     (:resume-pd :resume-kv :resume-db
                      :start-pd  :start-kv  :start-db) nodes
 
-                    (util/random-nonempty-subset nodes))
+                    (take (condp > (rand) 0.4 1 0.7 2 0.85 3 0.95 4 5) (shuffle nodes)))
             ; If the op wants to give us nodes, that's great
             nodes (or (:value op) nodes)]
         (assoc op :value
@@ -42,6 +42,9 @@
                                :kill-pd   (db/stop-pd!  test node)
                                :kill-kv   (db/stop-kv!  test node)
                                :kill-db   (db/stop-db!  test node)
+                               :stop-pd   (cu/signal! db/pd-bin :TERM)
+                               :stop-kv   (cu/signal! db/kv-bin :TERM)
+                               :stop-db   (cu/signal! db/db-bin :TERM)
                                :pause-pd  (cu/signal! db/pd-bin :STOP)
                                :pause-kv  (cu/signal! db/kv-bin :STOP)
                                :pause-db  (cu/signal! db/db-bin :STOP)
@@ -152,6 +155,7 @@
   (nemesis/compose
     {#{:start-pd  :start-kv  :start-db
        :kill-pd   :kill-kv   :kill-db
+       :stop-pd   :stop-kv   :stop-db
        :pause-pd  :pause-kv  :pause-db
        :resume-pd :resume-kv :resume-db}    (process-nemesis)
      #{:shuffle-leader  :del-shuffle-leader
@@ -258,6 +262,12 @@
              (op :start-kv))
           (o {:kill-db (op :kill-db)}
              (op :start-db))
+          (o {:stop-pd (op :stop-pd)}
+             (op :start-pd))
+          (o {:stop-kv (op :stop-kv)}
+             (op :start-kv))
+          (o {:stop-db (op :stop-db)}
+             (op :start-db))
           (o {:pause-pd (op :pause-pd)}
              (op :resume-pd))
           (o {:pause-kv (op :pause-kv)}
@@ -299,6 +309,9 @@
          (:kill-pd n)         (conj :start-pd)
          (:kill-kv n)         (conj :start-kv)
          (:kill-db n)         (conj :start-db)
+         (:stop-pd n)         (conj :start-pd)
+         (:stop-kv n)         (conj :start-kv)
+         (:stop-db n)         (conj :start-db)
          (:shuffle-leader n)  (conj :del-shuffle-leader)
          (:shuffle-region n)  (conj :del-shuffle-region)
          (:random-merge n)    (conj :del-random-merge)
@@ -375,8 +388,8 @@
                      :kill-kv true
 										 :kill-db true)
     (:stop n) (assoc :stop-pd true
-                     :kill-kv true
-                     :kill-db true)
+                     :stop-kv true
+                     :stop-db true)
     (:pause n) (assoc :pause-pd true
                       :pause-kv true
                       :pause-db true)

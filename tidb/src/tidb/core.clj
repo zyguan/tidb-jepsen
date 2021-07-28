@@ -145,10 +145,14 @@
     :partition-half
     :partition-ring
     :kill
+    :stop
     :pause
     :kill-pd
     :kill-kv
     :kill-db
+    :stop-pd
+    :stop-kv
+    :stop-db
     :pause-pd
     :pause-kv
     :pause-db
@@ -163,7 +167,7 @@
 
 (def process-faults
   "Faults affecting individual processes"
-  [:kill-pd :kill-kv :kill-db :pause-pd :pause-kv :pause-db])
+  [:kill-pd :kill-kv :kill-db :stop-pd :stop-kv :stop-db :pause-pd :pause-kv :pause-db])
 
 (def network-faults
   "Faults affecting the network"
@@ -194,6 +198,7 @@
          ; (map vector clock-faults)
          ; Compound faults of one class
         [[:kill]
+         [:stop]
          [:pause]
          [:schedules]]
          ; Clock skew plus other faults
@@ -237,15 +242,15 @@
   "Specification for how to render operations in plots"
   {:nemeses #{{:name        "kill pd"
                :color       "#E9A4A0"
-               :start       #{:kill-pd}
+               :start       #{:kill-pd :stop-pd}
                :stop        #{:start-pd}}
               {:name        "kill kv"
                :color       "#E9A0B9"
-               :start       #{:kill-kv}
+               :start       #{:kill-kv :stop-kv}
                :stop        #{:start-kv}}
               {:name        "kill db"
                :color       "#E9A0CF"
-               :start       #{:kill-db}
+               :start       #{:kill-db :stop-db}
                :stop        #{:start-db}}
               {:name        "pause pd"
                :color       "#C5A0E9"
