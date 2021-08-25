@@ -235,13 +235,14 @@
   :match-executable?
   :match-process-name?
   :pidfile
+  :env
   :process-name"
   [opts bin & args]
   (info "starting" (.getName (file (name bin))))
   (exec :echo (lit "`date +'%Y-%m-%d %H:%M:%S'`")
         "Jepsen starting" bin (escape args)
         :>> (:logfile opts))
-  (apply exec :start-stop-daemon :--start
+  (apply exec (map #(str (name (first %)) "=" (name (second %))) (:env opts)):start-stop-daemon :--start
          (when (:background? opts true) [:--background :--no-close])
          (when (:make-pidfile? opts true) :--make-pidfile)
          (when (:match-executable? opts true) [:--exec bin])

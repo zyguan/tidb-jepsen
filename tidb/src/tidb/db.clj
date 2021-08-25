@@ -207,6 +207,7 @@
       {:logfile db-stdout
        :pidfile db-pid-file
        :chdir   tidb-dir
+       :env {:GO_FAILPOINTS "github.com/pingcap/tidb/server/enableTestAPI=return"}
        }
       (str "./bin/" db-bin)
       :--store     (str "tikv")
