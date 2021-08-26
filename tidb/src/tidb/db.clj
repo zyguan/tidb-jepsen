@@ -422,7 +422,7 @@
         (try+ (start-wait-pd! test node)
               ; If we don't synchronize, KV might explode because PD isn't
               ; fully available
-              (jepsen/synchronize test)
+              (jepsen/synchronize test 180)
               (Thread/sleep 5000)
 
               (start-wait-kv! test node)
