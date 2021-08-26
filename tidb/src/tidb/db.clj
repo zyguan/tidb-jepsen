@@ -360,6 +360,7 @@
       (cu/install-archive! (tarball-url test) tidb-dir (:force-reinstall test))
       (info "Syncing disks to avoid slow fsync on db start")
       (c/exec :sync))
+      (info "Syncing disks done")
     ; (if-let [ratio (:faketime test)]
     ;   (do ; We need a special fork of faketime specifically for tikv, which
     ;       ; uses CLOCK_MONOTONIC_COARSE (not supported by 0.9.6 stock), and
@@ -418,11 +419,12 @@
       (c/su
         (install! test node)
         (configure!)
+        (jepsen/synchronize test 180)
 
         (try+ (start-wait-pd! test node)
               ; If we don't synchronize, KV might explode because PD isn't
               ; fully available
-              (jepsen/synchronize test 180)
+              (jepsen/synchronize test)
               (Thread/sleep 5000)
 
               (start-wait-kv! test node)
