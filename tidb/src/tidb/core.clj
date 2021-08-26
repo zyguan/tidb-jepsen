@@ -11,6 +11,7 @@
              [core :as jepsen]
              [generator :as gen]
              [os :as os]
+             [net :as net]
              [tests :as tests]
              [util :as util]]
             [jepsen.os.debian :as debian]
@@ -26,11 +27,19 @@
              [sets :as set]
              [table :as table]]))
 
+(deftype Image []
+  os/OS
+  (setup! [_ test node]
+          (info node "setting up prepared image")
+          (util/meh (net/heal! (:net test) test)))
+  (teardown! [_ test node]))
+
 (def oses
   "Supported operating systems"
   {"debian" debian/os
    "centos" centos/os
-   "none"   os/noop})
+   "none"   os/noop
+   "image"  (Image.)})
 
 (def workloads
   "A map of workload names to functions that can take CLI opts and construct
