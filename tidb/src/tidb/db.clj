@@ -390,7 +390,7 @@
   for it to do that before starting our tests if we want to be able to test
   things like failover. <sigh>"
   [node]
-  (loop [tries 1000]
+  (loop [tries 30]
     (when (zero? tries)
       (throw+ {:type :gave-up-waiting-for-replica-count}))
 
