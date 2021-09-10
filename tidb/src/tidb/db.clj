@@ -207,6 +207,7 @@
       {:logfile db-stdout
        :pidfile db-pid-file
        :chdir   tidb-dir
+       :env {:GO_FAILPOINTS "github.com/pingcap/tidb/server/enableTestAPI=return"}
        }
       (str "./bin/" db-bin)
       :--store     (str "tikv")
@@ -356,9 +357,10 @@
               (not (cu/exists? tidb-dir)))
       (info node "installing TiDB")
       (info (tarball-url test))
-      (cu/install-archive! (tarball-url test) tidb-dir (:force-reinstall test))
+      (cu/install-archive! (tarball-url test) tidb-dir)
       (info "Syncing disks to avoid slow fsync on db start")
       (c/exec :sync))
+      (info "Syncing disks done")
     ; (if-let [ratio (:faketime test)]
     ;   (do ; We need a special fork of faketime specifically for tikv, which
     ;       ; uses CLOCK_MONOTONIC_COARSE (not supported by 0.9.6 stock), and
@@ -388,7 +390,7 @@
   for it to do that before starting our tests if we want to be able to test
   things like failover. <sigh>"
   [node]
-  (loop [tries 1000]
+  (loop [tries 30]
     (when (zero? tries)
       (throw+ {:type :gave-up-waiting-for-replica-count}))
 
@@ -417,6 +419,7 @@
       (c/su
         (install! test node)
         (configure!)
+        (jepsen/synchronize test 180)
 
         (try+ (start-wait-pd! test node)
               ; If we don't synchronize, KV might explode because PD isn't

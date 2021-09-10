@@ -13,6 +13,7 @@
             [clojure.string :as str]
             [clojure.pprint :refer [pprint]]
             [tidb.db :as db]
+            [tidb.util :as tu]
             [clojure.tools.logging :refer :all]
             [slingshot.slingshot :refer [try+ throw+]]))
 
@@ -88,6 +89,41 @@
 
     (teardown! [this test])))
 
+(defn failpoint-nemesis
+  [failpoints]
+  (reify nemesis/Nemesis
+    (setup! [this test] this)
+
+    (invoke! [this test op]
+      (let [enable (fn [node]
+                     [node (doall
+                            (map #(try
+                                    (apply tu/fail-enable! node %)
+                                    [% :ok]
+                                    (catch Exception _
+                                      [% :fail]))
+                                 (map #(cons (case (name (first %)) "tidb" 10080 "tikv" 20180) (rest %))
+                                      (util/random-nonempty-subset failpoints))))])
+            disable (fn [node]
+                      [node (doall
+                             (map #(try
+                                     (apply tu/fail-disable! node %)
+                                     [% :ok]
+                                     (catch Exception _
+                                       [% :fail]))
+                                  (->> (concat
+                                        (map #(cons 10080 [(first %)]) (try (tu/fail-list node 10080) (catch Exception _ nil)))
+                                        (map #(cons 20180 [(first %)]) (try (tu/fail-list node 20180) (catch Exception _ nil))))
+                                       (filter #(not= "github.com/pingcap/tidb/server/enableTestAPI" (second %))))))])]
+        (assoc op :value
+               (case (:f op)
+                 :enable-failpoint
+                 (doall (pmap enable (util/random-nonempty-subset (:nodes test))))
+                 :disable-failpoint
+                 (doall (pmap disable (:nodes test)))))))
+
+    (teardown! [this test])))
+
 ; (defn slow-primary-nemesis
 ;   "A nemesis for creating slow, isolated primaries."
 ;   []
@@ -151,7 +187,7 @@
 
 (defn full-nemesis
   "Merges together all nemeses"
-  []
+  [n]
   (nemesis/compose
     {#{:start-pd  :start-kv  :start-db
        :kill-pd   :kill-kv   :kill-db
@@ -161,6 +197,7 @@
      #{:shuffle-leader  :del-shuffle-leader
        :shuffle-region  :del-shuffle-region
        :random-merge    :del-random-merge}  (schedule-nemesis)
+     #{:enable-failpoint :disable-failpoint} (failpoint-nemesis (:failpoints n))
      ; #{:slow-primary}                       (slow-primary-nemesis)
      {:start-partition :start
       :stop-partition  :stop}               (nemesis/partitioner nil)
@@ -285,6 +322,8 @@
               :partition-half       partition-half-gen
               :partition-ring       partition-ring-gen}
              (op :stop-partition))
+          (o {:enable-failpoint (op :enable-failpoint)}
+             (op :disable-failpoint))
           ; (opt-mix n {:clock-skew (clock-gen)})
           ]
          ; For all options relevant for this nemesis, mix them together
@@ -316,6 +355,8 @@
          (:shuffle-region n)  (conj :del-shuffle-region)
          (:random-merge n)    (conj :del-random-merge)
 
+         (:enable-failpoint n)
+         (conj :disable-failpoint)
          (some n [:partition-one :partition-half :partition-ring])
          (conj :stop-partition))
        (map op)
@@ -399,12 +440,13 @@
     (:partition n) (assoc :partition-one        true
                           :partition-pd-leader  true
                           :partition-half      true
-                          :partition-ring      true)))
+                          :partition-ring      true)
+    (:failpoint n) (assoc :enable-failpoint true)))
 
 (defn nemesis
   "Composite nemesis and generator, given test options."
   [opts]
   (let [n (expand-options (:nemesis opts))]
-    {:nemesis         (full-nemesis)
+    {:nemesis         (full-nemesis n)
      :generator       (full-generator n)
      :final-generator (final-generator n)}))

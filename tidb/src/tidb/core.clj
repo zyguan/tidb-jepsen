@@ -11,6 +11,7 @@
              [core :as jepsen]
              [generator :as gen]
              [os :as os]
+             [net :as net]
              [tests :as tests]
              [util :as util]]
             [jepsen.os.debian :as debian]
@@ -26,11 +27,19 @@
              [sets :as set]
              [table :as table]]))
 
+(deftype Image []
+  os/OS
+  (setup! [_ test node]
+          (info node "setting up prepared image")
+          (util/meh (net/heal! (:net test) test)))
+  (teardown! [_ test node]))
+
 (def oses
   "Supported operating systems"
   {"debian" debian/os
    "centos" centos/os
-   "none"   os/noop})
+   "none"   os/noop
+   "image"  (Image.)})
 
 (def workloads
   "A map of workload names to functions that can take CLI opts and construct
@@ -160,6 +169,7 @@
     :shuffle-leader
     :shuffle-region
     :random-merge
+    :failpoint
     ; :clock-skew
     ; Special-case generators
     ; :slow-primary
@@ -280,6 +290,10 @@
                :color       "#A0C8E9"
                :start       #{:start-partition}
                :stop        #{:stop-partition}}
+              {:name        "failpoint"
+               :color       "#FFB266"
+               :start       #{:enable-failpoint}
+               :stop        #{:disable-failpoint}}
               ;{:name        "clock"
               ; :color       "#A0E9DB"
               ; :start       #{:strobe-clock :bump-clock}
@@ -312,7 +326,8 @@
                     (str " nemesis " (->> (dissoc (:nemesis opts)
                                                   :interval
                                                   :schedule
-                                                  :long-recovery)
+                                                  :long-recovery
+                                                  :failpoints)
                                           keys
                                           (map name)
                                           sort
@@ -363,6 +378,13 @@
        (map str/trim)
        (drop-while empty)))
 
+(defn parse-failpoints
+  [s]
+  (->> (str/split s #",")
+       (map str/trim)
+       (drop-while empty)
+       (map #(str/split % #":"))))
+
 (def cli-opts
   "Command line options for tools.cli"
   [[nil "--faketime MAX_RATIO"
@@ -397,6 +419,13 @@
     :parse-fn keyword
     :assoc-fn (fn [m k v] (update m :nemesis assoc :schedule v))
     :validate [#{:fixed :random} "Must be either 'fixed' or 'random'"]]
+
+   [nil "--failpoints FAILPOINTS" "List of failpoints to perform."
+    :parse-fn parse-failpoints
+    :assoc-fn (fn [m k v] (update m :nemesis assoc :failpoints v))
+    :validate [(fn [parsed]
+                 (every? #(= 3 (count %)) parsed))
+               "Should be a comma-seperated list like `tidb:tikvclient/rpcFailOnRecv:2%return,tikv:delay_update_max_ts:return`."]]
 
    ["-o" "--os NAME" "debian, centos, or none"
     :default debian/os
