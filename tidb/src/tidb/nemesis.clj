@@ -124,6 +124,43 @@
 
     (teardown! [this test])))
 
+(defn netem-delay
+  [test node]
+  (c/su (c/exec "/sbin/tc" :qdisc :add :dev :eth0 :root :netem
+                :delay :5ms :10ms :distribution :normal)))
+
+(defn netem-loss
+  [test node]
+  (c/su (c/exec "/sbin/tc" :qdisc :add :dev :eth0 :root :netem
+                :loss "0.05%")))
+
+(defn netem-noop
+  [test node]
+  (warn "netem-type is unspecified"))
+
+(def netem-types #{netem-delay netem-loss netem-noop})
+
+(defn netem-nemesis
+  [f]
+  (reify nemesis/Nemesis
+    (setup! [this test] this)
+    (invoke! [this test op]
+      (assoc op :value
+             (case (:f op)
+               :start-netem
+               (c/on-nodes test (util/random-nonempty-subset (:nodes test)) f)
+               :stop-netem
+               (c/on-nodes
+                test
+                (fn [test node]
+                  (try
+                    (c/su (c/exec "/sbin/tc" :qdisc :del :dev :eth0 :root))
+                    (catch RuntimeException e
+                      (if (re-find #"RTNETLINK answers: No such file or directory"
+                                   (.getMessage e))
+                        nil (throw e)))))))))
+    (teardown! [this test])))
+
 ; (defn slow-primary-nemesis
 ;   "A nemesis for creating slow, isolated primaries."
 ;   []
@@ -198,6 +235,7 @@
        :shuffle-region  :del-shuffle-region
        :random-merge    :del-random-merge}  (schedule-nemesis)
      #{:enable-failpoint :disable-failpoint} (failpoint-nemesis (:failpoints n))
+     #{:start-netem :stop-netem} (netem-nemesis (:netem-type n netem-noop))
      ; #{:slow-primary}                       (slow-primary-nemesis)
      {:start-partition :start
       :stop-partition  :stop}               (nemesis/partitioner nil)
@@ -324,6 +362,8 @@
              (op :stop-partition))
           (o {:enable-failpoint (op :enable-failpoint)}
              (op :disable-failpoint))
+          (o {:start-netem (op :start-netem)}
+             (op :stop-netem))
           ; (opt-mix n {:clock-skew (clock-gen)})
           ]
          ; For all options relevant for this nemesis, mix them together
@@ -354,6 +394,7 @@
          (:shuffle-leader n)  (conj :del-shuffle-leader)
          (:shuffle-region n)  (conj :del-shuffle-region)
          (:random-merge n)    (conj :del-random-merge)
+         (:start-netem n)     (conj :stop-netem)
 
          (:enable-failpoint n)
          (conj :disable-failpoint)
@@ -441,7 +482,8 @@
                           :partition-pd-leader  true
                           :partition-half      true
                           :partition-ring      true)
-    (:failpoint n) (assoc :enable-failpoint true)))
+    (:failpoint n) (assoc :enable-failpoint true)
+    (:netem n)     (assoc :start-netem true)))
 
 (defn nemesis
   "Composite nemesis and generator, given test options."
