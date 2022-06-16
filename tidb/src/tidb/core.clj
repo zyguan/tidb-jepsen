@@ -170,6 +170,7 @@
     :shuffle-region
     :random-merge
     :failpoint
+    :netem
     ; :clock-skew
     ; Special-case generators
     ; :slow-primary
@@ -294,6 +295,10 @@
                :color       "#FFB266"
                :start       #{:enable-failpoint}
                :stop        #{:disable-failpoint}}
+              {:name        "netem"
+               :color       "#FCBA03"
+               :start       #{:start-netem}
+               :stop        #{:stop-netem}}
               ;{:name        "clock"
               ; :color       "#A0E9DB"
               ; :start       #{:strobe-clock :bump-clock}
@@ -426,6 +431,13 @@
     :validate [(fn [parsed]
                  (every? #(= 3 (count %)) parsed))
                "Should be a comma-seperated list like `tidb:tikvclient/rpcFailOnRecv:2%return,tikv:delay_update_max_ts:return`."]]
+
+   [nil "--netem-type TYPE" "Netem event type."
+    :parse-fn #(case %
+                 "delay" nemesis/netem-delay
+                 "loss" nemesis/netem-loss)
+    :assoc-fn (fn [m k v] (update m :nemesis assoc :netem-type v))
+    :validate [nemesis/netem-types "Must be 'delay' or 'loss'"]]
 
    ["-o" "--os NAME" "debian, centos, or none"
     :default debian/os
