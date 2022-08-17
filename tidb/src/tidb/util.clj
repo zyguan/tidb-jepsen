@@ -1,6 +1,7 @@
 (ns tidb.util
   (:require [clojure.string :as str]
-            [clj-http.client :as http]))
+            [clj-http.client :as http]
+            [jepsen.tests.cycle :refer [DataExplainer directed-graph link]]))
 
 (defn isolation-level [test] (get test :isolation :repeatable-read))
 
@@ -35,3 +36,44 @@
        (map #(str/split % #"=" 2))
        (filter #(not (empty? (second %))))
        (into {})))
+
+(defn get-start-ts [op] (get-in op [:txn-info :start_ts] 0))
+(defn get-commit-ts [op] (get-in op [:txn-info :commit_ts] 0))
+
+(defrecord TSOExplainer []
+  DataExplainer
+  (explain-pair-data
+    [_ a b]
+    {:type :tso :a a :b b})
+  (render-explanation
+    [_ {:keys [a b]} a-name b-name]
+    (str a-name "'s commit-ts " (get-commit-ts a) " < " b-name "'s start-ts " (get-start-ts b))))
+
+(defn tso-graph [history]
+  (loop [h (->> history (filter get-start-ts) (sort-by get-start-ts))
+         g (directed-graph)
+         ops nil]
+    (if-let [op (first h)]
+      (let [start-ts (get-start-ts op)
+            commit-ts (get-commit-ts op)
+            link-to-op (fn [g op'] (link g op' op :tso))
+            before-op? (fn [op'] (< (get-commit-ts op') start-ts))
+            ops' (filter before-op? ops)
+            implied-ts (when (seq ops') (apply max (map get-start-ts ops')))
+            after-implied-ts? (fn [op'] (>= (get-commit-ts op') implied-ts))]
+        (cond
+          (zero? commit-ts)
+          (recur (next h)
+                 (reduce link-to-op g ops')
+                 ops)
+
+          implied-ts
+          (recur (next h)
+                 (reduce link-to-op g (filter after-implied-ts? ops'))
+                 (cons op (filter after-implied-ts? ops)))
+
+          :else
+          (recur (next h)
+                 g
+                 (cons op ops))))
+      [g (TSOExplainer.)])))
