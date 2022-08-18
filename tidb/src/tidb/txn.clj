@@ -77,9 +77,9 @@
               (assoc op :type :ok, :value
                      (mapv (partial mop! c test table-count) txn)))
             (c/with-error-handling op
-              (c/attach-txn-info conn
-                (assoc op :type :ok, :value
-                       (mapv (partial mop! conn test table-count) txn)))))))
+              (cond->> (assoc op :type :ok, :value
+                              (mapv (partial mop! conn test table-count) txn))
+                (not= :r (-> txn first first)) (c/attach-txn-info conn))))))
 
   (teardown! [this test])
 

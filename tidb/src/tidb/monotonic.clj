@@ -110,7 +110,8 @@
      :checker (checker/compose
                 {:cycle (cycle/checker
                           (cycle/combine cycle/monotonic-key-graph
-                                         cycle/realtime-graph))
+                                         cycle/realtime-graph
+                                         util/tso-graph))
                  :timeline (timeline/html)})
      :generator (->> (gen/mix [(incs key-count)
                                (reads key-count)]))}))
@@ -166,7 +167,8 @@
   {:client  (txn/client {:val-type "int"})
    :checker (cycle/checker
               (cycle/combine cycle/wr-graph
-                             cycle/realtime-graph))
+                             cycle/realtime-graph
+                             util/tso-graph))
    :generator (->> (wr-txns {:min-txn-length 2, :max-txn-length 5})
                    (map (fn [txn] {:type :invoke, :f :txn, :value txn}))
                    gen/seq)})
@@ -214,4 +216,6 @@
                    (map (fn [txn] {:type :invoke, :f :txn, :value txn}))
                    gen/seq)
    :checker (append/checker {:anomalies         [(if (= :read-committed (:isolation opts)) :G1 :G-single)]
-                             :additional-graphs [cycle/realtime-graph]})})
+                             ; Jepsen may raise an IllegalStateException("Don't know how to classify") if a cycle only
+                             ; consists of realtime edges and tso edges, which is typically caused by wrong tso info.
+                             :additional-graphs [cycle/realtime-graph util/tso-graph]})})
