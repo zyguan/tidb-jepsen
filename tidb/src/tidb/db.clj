@@ -192,12 +192,13 @@
        :chdir   tidb-dir
        }
       (str "./bin/" kv-bin)
-      :--pd             (pd-endpoints test)
-      :--addr           (str "0.0.0.0:20160")
-      :--advertise-addr (str (name node) ":" "20160")
-      :--data-dir       kv-data-dir
-      :--log-file       kv-log-file
-      :--config         kv-config-file)))
+      :--pd                    (pd-endpoints test)
+      :--addr                  (str "0.0.0.0:20160")
+      :--advertise-addr        (str (name node) ":" "20160")
+      :--advertise-status-addr (str (name node) ":" "20180")
+      :--data-dir              kv-data-dir
+      :--log-file              kv-log-file
+      :--config                kv-config-file)))
 
 (defn start-db!
   "Starts the TiDB daemon"
