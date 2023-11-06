@@ -274,7 +274,7 @@
   [& args]
   (try (apply j/execute! args)
        (catch java.sql.SQLSyntaxErrorException e
-         (when-not (re-find #"index already exist" (.getMessage e))
+         (when-not (re-find #"(index already exist|Duplicate key name)" (.getMessage e))
            (throw e)))))
 
 (defn rand-init-txn!
