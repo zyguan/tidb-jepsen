@@ -41,6 +41,25 @@
 (def db-slow-file   (str tidb-dir "/slow.log"))
 (def db-stdout      (str tidb-dir "/db.stdout"))
 (def db-pid-file    (str tidb-dir "/db.pid"))
+(def pd-services
+  {:api
+   {:bin "pd-api"
+    :stdout (str tidb-dir "/pd-api.stdout")
+    :log-file (str tidb-dir "/pd-api.log")
+    :pid-file (str tidb-dir "/pd-api.pid")
+    :port-offset 0}
+   :tso
+   {:bin "pd-tso"
+    :stdout (str tidb-dir "/pd-tso.stdout")
+    :log-file (str tidb-dir "/pd-tso.log")
+    :pid-file (str tidb-dir "/pd-tso.pid")
+    :port-offset 100}
+   :scheduling
+   {:bin "pd-scheduling"
+    :stdout (str tidb-dir "/pd-scheduling.stdout")
+    :log-file (str tidb-dir "/pd-scheduling.log")
+    :pid-file (str tidb-dir "/pd-scheduling.pid")
+    :port-offset 200}})
 
 (def client-port 2379)
 (def peer-port   2380)
@@ -162,15 +181,44 @@
          (recur)
          res#))))
 
+(defn start-pd-service!
+  [test node svc]
+  (c/su
+   (cu/start-daemon!
+    {:logfile (get-in pd-services [svc :stdout])
+     :pidfile (get-in pd-services [svc :pid-file])
+     :chdir   tidb-dir
+     :process-name (get-in pd-services [svc :bin])}
+    (str "./bin/" (get-in pd-services [svc :bin]))
+    "services" svc
+    :--log-file                 (get-in pd-services [svc :log-file])
+    :--config                   pd-config-file
+    (condp = svc
+      :api
+      [:--name                  (get-in (tidb-map test) [node :pd])
+       :--data-dir              pd-data-dir
+       :--client-urls           (str "http://0.0.0.0:" client-port)
+       :--peer-urls             (str "http://0.0.0.0:" peer-port)
+       :--advertise-client-urls (client-url node)
+       :--advertise-peer-urls   (peer-url node)
+       :--initial-cluster       (initial-cluster test)]
+      [:--listen-addr           (node-url node (+ client-port (get-in pd-services [svc :port-offset])))
+       :--advertise-listen-addr (node-url node (+ client-port (get-in pd-services [svc :port-offset])))
+       :--backend-endpoints     (str "http://0.0.0.0:" client-port)]))))
+
 (defn start-pd!
   "Starts the placement driver daemon"
   [test node]
-  (c/su
-    (cu/start-daemon!
+  (if (:pd-services test)
+    (do
+      (start-pd-service! test node :api)
+      (start-pd-service! test node :tso)
+      (start-pd-service! test node :scheduling))
+    (c/su
+     (cu/start-daemon!
       {:logfile pd-stdout
        :pidfile pd-pid-file
-       :chdir   tidb-dir
-       }
+       :chdir   tidb-dir}
       (str "./bin/" pd-bin)
       :--name                  (get-in (tidb-map test) [node :pd])
       :--data-dir              pd-data-dir
@@ -180,7 +228,7 @@
       :--advertise-peer-urls   (peer-url node)
       :--initial-cluster       (initial-cluster test)
       :--log-file              pd-log-file
-      :--config                pd-config-file)))
+      :--config                pd-config-file))))
 
 (defn start-kv!
   "Starts the TiKV daemon"
@@ -310,11 +358,21 @@
                       (cu/daemon-running? db-pid-file)  :starting
                       true                              :crashed)))
 
-(defn stop-pd! [test node] (c/su
-                             ; Faketime wrapper means we only kill the wrapper
-                             ; script, not the underlying binary
-                             (cu/stop-daemon! pd-bin pd-pid-file)
-                             (cu/grepkill! pd-bin)))
+(defn stop-pd-service! [test node svc]
+  (c/su
+    (cu/stop-daemon! (get-in pd-services [svc :bin]) (get-in pd-services [svc :pid-file]))
+    (cu/grepkill! (get-in pd-services [svc :bin]))))
+
+(defn stop-pd!
+  [test node]
+  (if (:pd-services test)
+    (do
+      (stop-pd-service! test node :scheduling)
+      (stop-pd-service! test node :tso)
+      (stop-pd-service! test node :api))
+    (c/su
+     (cu/stop-daemon! pd-bin pd-pid-file)
+     (cu/grepkill! pd-bin))))
 
 (defn stop-kv! [test node] (c/su (cu/stop-daemon! kv-bin kv-pid-file)
                                  (cu/grepkill! kv-bin)))
@@ -359,6 +417,10 @@
       (info node "installing TiDB")
       (info (tarball-url test))
       (cu/install-archive! (tarball-url test) tidb-dir)
+      (when (:pd-services test)
+        (info "Creating symbol links for PD services")
+        (doseq [[_ info] pd-services]
+          (c/exec :ln :-sf (str tidb-bin-dir "/" pd-bin) (str tidb-bin-dir "/" (get info :bin)))))
       (info "Syncing disks to avoid slow fsync on db start")
       (c/exec :sync))
       (info "Syncing disks done")
@@ -479,10 +541,16 @@
 
     db/LogFiles
     (log-files [_ test node]
-      [db-log-file
-       db-slow-file
-       db-stdout
-       kv-log-file
-       kv-stdout
-       pd-log-file
-       pd-stdout])))
+      (concat [db-log-file
+               db-slow-file
+               db-stdout
+               kv-log-file
+               kv-stdout]
+              (if (:pd-services test)
+                [(get-in pd-services [:api :log-file])
+                 (get-in pd-services [:api :stdout])
+                 (get-in pd-services [:tso :log-file])
+                 (get-in pd-services [:tso :stdout])
+                 (get-in pd-services [:scheduling :log-file])
+                 (get-in pd-services [:scheduling :stdout])]
+                [pd-log-file pd-stdout])))))
