@@ -494,6 +494,9 @@
    [nil "--table-cache" "If true, run test on cached table(s)."
     :default false]
 
+   [nil "--pd-services" "If true, run pd as mutiple micro services."
+    :default false]
+
    [nil "--predicate-read" "If present, try to read using a query over a secondary key, rather than by primary key. Implied by --use-index."
     :default false]
 
