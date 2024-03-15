@@ -497,6 +497,9 @@
    [nil "--pd-services" "If true, run pd as mutiple micro services."
     :default false]
 
+   [nil "--single-stmt-write", "If true, performs write operations in a single statement when possible."
+    :default false]
+
    [nil "--predicate-read" "If present, try to read using a query over a secondary key, rather than by primary key. Implied by --use-index."
     :default false]
 
