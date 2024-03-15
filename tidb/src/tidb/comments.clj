@@ -63,8 +63,9 @@
       :write (let [[k id] (:value op)
                    table (id->table table-count id)]
                (c/rand-init-txn! test conn)
-               (c/insert! conn table {:id id, :tkey k})
-               (assoc op :type :ok))
+               (c/insert! conn table {:id id, :tkey k}
+                          {:transaction? (not (:single-stmt-write test))})
+               (c/attach-txn-info conn (assoc op :type :ok)))
 
       :read (with-txn op [c conn {:isolation (util/isolation-level test)}]
               (->> (table-names table-count)

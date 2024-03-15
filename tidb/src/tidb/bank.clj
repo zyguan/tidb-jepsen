@@ -17,7 +17,7 @@
    :to     [to (- b2 amount) b2]
    :amount amount})
 
-(defn single-stmt-transfer [conn op]
+(defn single-stmt-transfer! [conn op]
   (let [{:keys [from to amount]} (:value op)]
     (c/execute! conn
                 ["update accounts set balance = balance + if(id=?,-?,?) where id=? or (id=? and 1/if(balance>=?,1,0))"
@@ -58,7 +58,7 @@
 
   (invoke! [this test op]
     (if (and (= :transfer (:f op)) (:single-stmt-write test))
-      (with-error-handling op (single-stmt-transfer conn op))
+      (with-error-handling op (single-stmt-transfer! conn op))
       (with-txn op [c conn {:isolation (util/isolation-level test)
                             :before-hook (partial c/rand-init-txn! test conn)}]
         (try

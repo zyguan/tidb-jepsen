@@ -27,7 +27,8 @@
       (c/with-txn-aborts op
         (c/rand-init-txn! test conn)
         (case (:f op)
-          :add  (do (c/insert! conn :sets (select-keys op [:value]))
+          :add  (do (c/insert! conn :sets (select-keys op [:value])
+                               {:transaction? (not (:single-stmt-write test))})
                     (c/attach-txn-info conn (assoc op :type :ok)))
 
           :read (->> (c/query conn ["select * from sets"])

@@ -1,8 +1,7 @@
 (ns tidb.txn
   "Client for transactional workloads."
-  (:require [clojure.tools.logging :refer [info]]
-            [jepsen [client :as client]
-                    [generator :as gen]]
+  (:require [clojure.string :as str]
+            [jepsen [client :as client]]
             [tidb.sql :as c :refer :all]
             [tidb.util :as util]))
 
@@ -49,6 +48,38 @@
                       k k (str v) (str v)])]
              v))]))
 
+(defn txn-type [test table-count txn]
+  (let [ops  (set (map first txn))
+        tbls (set (map #(table-for table-count (second %)) txn))
+        single-stmt? (and (:single-stmt-write test)
+                          (= 1 (count ops))
+                          (= 1 (count tbls)))]
+    (cond
+      (and single-stmt? (= :w (first ops))) :single-stmt-write
+      (and single-stmt? (= :append (first ops))) :single-stmt-append
+      (= 1 (count txn)) :query
+      :else :txn)))
+
+(defn single-stmt-write! [conn table-count op]
+  (let [txn   (:value op)
+        table (table-for table-count (second (first txn)))
+        query (str "insert into " table " (id, sk, val) values "
+                   (str/join ", " (repeat (count txn) "(?, ?, ?)"))
+                   " on duplicate key update val = values(val)")
+        args  (mapcat (fn [[_ k v]] [k k v]) txn)]
+    (c/execute! conn (into [query] args) {:transaction? false})
+    (attach-txn-info conn (assoc op :type :ok))))
+
+(defn single-stmt-append! [conn table-count op]
+  (let [txn   (:value op)
+        table (table-for table-count (second (first txn)))
+        query (str "insert into " table " (id, sk, val) values "
+                   (str/join ", " (repeat (count txn) "(?, ?, ?)"))
+                   " on duplicate key update val = CONCAT(val, ',', values(val))")
+        args  (mapcat (fn [[_ k v]] [k k (str v)]) txn)]
+    (c/execute! conn (into [query] args) {:transaction? false})
+    (attach-txn-info conn (assoc op :type :ok))))
+
 (defrecord Client [conn val-type table-count]
   client/Client
   (open! [this test node]
@@ -68,19 +99,26 @@
           (c/execute! conn [(str "alter table " (table-name i) " cache")])))))
 
   (invoke! [this test op]
-    (let [txn      (:value op)
-          use-txn? (< 1 (count txn))]
-          ;use-txn? false]
-          (if use-txn?
-            (c/with-txn op [c conn {:isolation (util/isolation-level test)
-                                    :before-hook (partial c/rand-init-txn! test conn)}]
-              (assoc op :type :ok, :value
-                     (mapv (partial mop! c test table-count) txn)))
-            (c/with-error-handling op
-              (let [attach-info (if (= :r (-> txn first first)) c/attach-query-info c/attach-txn-info)]
-                (attach-info conn
-                             (assoc op :type :ok, :value
-                                    (mapv (partial mop! conn test table-count) txn))))))))
+    (let [txn (:value op)]
+      (condp = (txn-type test table-count txn)
+
+        :single-stmt-write
+        (c/with-error-handling op (single-stmt-write! conn table-count op))
+
+        :single-stmt-append
+        (c/with-error-handling op (single-stmt-append! conn table-count op))
+
+        :query
+        (c/with-error-handling op
+          (let [attach-info (if (= :r (-> txn first first)) c/attach-query-info c/attach-txn-info)
+                res (mapv (partial mop! conn test table-count) txn)]
+            (attach-info conn (assoc op :type :ok, :value res))))
+
+        ;; else
+        (c/with-txn op [c conn {:isolation (util/isolation-level test)
+                                :before-hook (partial c/rand-init-txn! test conn)}]
+          (assoc op :type :ok, :value
+                 (mapv (partial mop! c test table-count) txn))))))
 
   (teardown! [this test])
 
