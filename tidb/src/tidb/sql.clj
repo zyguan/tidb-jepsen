@@ -225,6 +225,7 @@
     (catch java.sql.BatchUpdateException e#
       (condp re-find (.getMessage e#)
         #"Query timed out" (assoc ~op :type :info, :error :query-timed-out)
+        #"Division by 0" (assoc ~op :type :fail, :error :division-by-zero)
         (throw e#)))
 
     (catch java.sql.SQLNonTransientConnectionException e#
