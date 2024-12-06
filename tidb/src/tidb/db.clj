@@ -541,16 +541,17 @@
 
     db/LogFiles
     (log-files [_ test node]
-      (concat [db-log-file
-               db-slow-file
-               db-stdout
-               kv-log-file
-               kv-stdout]
-              (if (:pd-services test)
-                [(get-in pd-services [:api :log-file])
-                 (get-in pd-services [:api :stdout])
-                 (get-in pd-services [:tso :log-file])
-                 (get-in pd-services [:tso :stdout])
-                 (get-in pd-services [:scheduling :log-file])
-                 (get-in pd-services [:scheduling :stdout])]
-                [pd-log-file pd-stdout])))))
+      (when-not (:skip-collect-logs test)
+        (concat [db-log-file
+                 db-slow-file
+                 db-stdout
+                 kv-log-file
+                 kv-stdout]
+                (if (:pd-services test)
+                  [(get-in pd-services [:api :log-file])
+                   (get-in pd-services [:api :stdout])
+                   (get-in pd-services [:tso :log-file])
+                   (get-in pd-services [:tso :stdout])
+                   (get-in pd-services [:scheduling :log-file])
+                   (get-in pd-services [:scheduling :stdout])]
+                  [pd-log-file pd-stdout]))))))

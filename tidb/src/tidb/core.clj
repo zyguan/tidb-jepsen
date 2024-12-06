@@ -542,7 +542,10 @@
 
    [nil "--init-txn-sql STMTS", "Randomly choose one of these statements, execute it before transactions"
     :parse-fn parse-sql-stmts
-    :default nil]])
+    :default nil]
+
+   [nil "--skip-collect-logs" "If present, skips collecting logs after the test."
+    :default false]])
 
 (defn test-all-cmd
   "A command that runs a whole suite of tests in one go."
