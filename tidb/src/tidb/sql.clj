@@ -93,6 +93,12 @@
   (close! conn)
   (open (::node conn) (::test conn)))
 
+(defn set-auto-commit!
+  "Set a JDBC connection's autocommit variable."
+  [conn auto-commit]
+  (when-let [c (j/db-find-connection conn)]
+    (.setAutoCommit c auto-commit)))
+
 (defn execute!
   "Like j/execute!, but provides a default timeout."
   ([db sql-params]
