@@ -114,7 +114,7 @@
                                   (->> (concat
                                         (map #(cons 10080 [(first %)]) (try (tu/fail-list node 10080) (catch Exception _ nil)))
                                         (map #(cons 20180 [(first %)]) (try (tu/fail-list node 20180) (catch Exception _ nil))))
-                                       (filter #(not= "github.com/pingcap/tidb/server/enableTestAPI" (second %))))))])]
+                                       (filter #(not (str/includes? (second %) "server/enableTestAPI"))))))])]
         (assoc op :value
                (case (:f op)
                  :enable-failpoint
@@ -155,9 +155,10 @@
                 (fn [test node]
                   (try
                     (c/su (c/exec "/sbin/tc" :qdisc :del :dev :eth0 :root))
-                    (catch RuntimeException e
-                      (if (re-find #"RTNETLINK answers: No such file or directory"
-                                   (.getMessage e))
+                    (catch Exception e
+                      (if (or
+                           (re-find #"RTNETLINK answers: No such file or directory" (.getMessage e))
+                           (re-find #"Cannot delete qdisc with handle of zero" (.getMessage e)))
                         nil (throw e)))))))))
     (teardown! [this test])))
 

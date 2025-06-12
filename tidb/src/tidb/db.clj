@@ -218,7 +218,9 @@
      (cu/start-daemon!
       {:logfile pd-stdout
        :pidfile pd-pid-file
-       :chdir   tidb-dir}
+       :chdir   tidb-dir
+       :env {:GO_FAILPOINTS (-> (System/getenv) (get "PD_FAILPOINTS" ""))}
+       }
       (str "./bin/" pd-bin)
       :--name                  (get-in (tidb-map test) [node :pd])
       :--data-dir              pd-data-dir
@@ -238,6 +240,7 @@
       {:logfile kv-stdout
        :pidfile kv-pid-file
        :chdir   tidb-dir
+       :env {:FAILPOINTS (-> (System/getenv) (get "KV_FAILPOINTS" ""))}
        }
       (str "./bin/" kv-bin)
       :--pd                    (pd-endpoints test)
@@ -256,7 +259,7 @@
       {:logfile db-stdout
        :pidfile db-pid-file
        :chdir   tidb-dir
-       :env {:GO_FAILPOINTS "github.com/pingcap/tidb/pkg/server/enableTestAPI=return;github.com/pingcap/tidb/server/enableTestAPI=return"}
+       :env {:GO_FAILPOINTS (-> (System/getenv) (get "DB_FAILPOINTS" ""))}
        }
       (str "./bin/" db-bin)
       :--store     (str "tikv")
@@ -317,7 +320,7 @@
         (start!))
 
       ; Give it a bit
-      (Thread/sleep 1000)
+      (Thread/sleep 10000)
 
       ; OK, how's it doing?
       (let [status (get-status)]
