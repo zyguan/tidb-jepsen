@@ -420,6 +420,10 @@
       (info node "installing TiDB")
       (info (tarball-url test))
       (cu/install-archive! (tarball-url test) tidb-dir)
+      (doseq [url (:binary-urls test)]
+        (info "Downloading additional binary from" url)
+        (let [f (cu/cached-wget! url)]
+          (c/exec :tar :-xf f :-C tidb-bin-dir)))
       (when (:pd-services test)
         (info "Creating symbol links for PD services")
         (doseq [[_ info] pd-services]

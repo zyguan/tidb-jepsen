@@ -455,6 +455,13 @@
    ["-v" "--version VERSION" "What version of TiDB should to install"
     :default "v3.0.0-beta.1"]
 
+   [nil "--binary-urls URLS" "URLs to binary tarballs which overwrite the default tarball installation."
+    :default nil
+    :parse-fn (fn [s]
+                (->> (str/split s #",")
+                     (map str/trim)
+                     (drop-while empty?)))]
+
    [nil "--tarball-url URL" "URL to TiDB tarball to install, has precedence over --version"
     :default nil]])
 
