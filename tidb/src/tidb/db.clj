@@ -293,7 +293,7 @@
       :--path           (pd-endpoints test)
       :--config         system-db-config-file
       :--log-file       system-db-log-file
-      :--port           (str system-db-port)
+      :-P               (str system-db-port)
       :--status         (str system-db-status-port))))
 
 (defn page-ready?
@@ -469,6 +469,15 @@
       (info node "installing TiDB")
       (info (tarball-url test))
       (cu/install-archive! (tarball-url test) tidb-dir)
+      ; Some tarballs place binaries directly in tidb-dir instead of tidb/bin.
+      ; Ensure a consistent ./bin layout by creating symlinks when needed.
+      (when (not (cu/exists? tidb-bin-dir))
+        (info "Creating bin layout for TiDB tarball")
+        (c/exec :mkdir :-p tidb-bin-dir)
+        (doseq [b [pd-bin kv-bin db-bin pdctl-bin]]
+          (when (cu/exists? (str tidb-dir "/" b))
+            (c/exec :ln :-sf (str tidb-dir "/" b)
+                    (str tidb-bin-dir "/" b)))))
       (when (:pd-services test)
         (info "Creating symbol links for PD services")
         (doseq [[_ info] pd-services]
