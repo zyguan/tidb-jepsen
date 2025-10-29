@@ -41,6 +41,15 @@
 (def db-slow-file   (str tidb-dir "/slow.log"))
 (def db-stdout      (str tidb-dir "/db.stdout"))
 (def db-pid-file    (str tidb-dir "/db.pid"))
+(def system-db-config-file (str tidb-dir "/system-db.conf"))
+(def system-db-log-file    (str tidb-dir "/system-db.log"))
+(def system-db-slow-file   (str tidb-dir "/system-slow.log"))
+(def system-db-stdout      (str tidb-dir "/system-db.stdout"))
+(def system-db-pid-file    (str tidb-dir "/system-db.pid"))
+(def system-db-port        14000)
+(def system-db-status-port 11080)
+(def go-failpoints-env
+  {:GO_FAILPOINTS "github.com/pingcap/tidb/pkg/server/enableTestAPI=return;github.com/pingcap/tidb/server/enableTestAPI=return"})
 (def pd-services
   {:api
    {:bin "pd-api"
@@ -119,6 +128,12 @@
   "Writes configuration file for tidb"
   []
   (c/su (c/exec :echo (slurp (io/resource "tidb.conf")) :> db-config-file)))
+
+(defn configure-system-db!
+  "Writes configuration file for the SYSTEM keyspace TiDB instance"
+  []
+  (c/su (c/exec :echo (slurp (io/resource "system-tidb.conf"))
+                :> system-db-config-file)))
 
 (defn configure!
   "Write all config files."
@@ -256,13 +271,30 @@
       {:logfile db-stdout
        :pidfile db-pid-file
        :chdir   tidb-dir
-       :env {:GO_FAILPOINTS "github.com/pingcap/tidb/pkg/server/enableTestAPI=return;github.com/pingcap/tidb/server/enableTestAPI=return"}
+       :env     go-failpoints-env
        }
       (str "./bin/" db-bin)
       :--store     (str "tikv")
       :--path      (pd-endpoints test)
       :--config    db-config-file
       :--log-file  db-log-file)))
+
+(defn start-system-db!
+  "Starts the SYSTEM keyspace TiDB daemon"
+  [test node]
+  (c/su
+    (cu/start-daemon!
+      {:logfile system-db-stdout
+       :pidfile system-db-pid-file
+       :chdir   tidb-dir
+       :env     go-failpoints-env}
+      (str "./bin/" db-bin)
+      :--store          (str "tikv")
+      :--path           (pd-endpoints test)
+      :--config         system-db-config-file
+      :--log-file       system-db-log-file
+      :--port           (str system-db-port)
+      :--status         (str system-db-status-port))))
 
 (defn page-ready?
   "Fetches a status page URL on the local node, and returns true iff the page
@@ -286,6 +318,11 @@
   "Is TiDB ready?"
   []
   (page-ready? "http://127.0.0.1:10080/status"))
+
+(defn system-db-ready?
+  "Is the SYSTEM TiDB instance ready?"
+  []
+  (page-ready? (str "http://127.0.0.1:" system-db-status-port "/status")))
 
 (defn restart-loop*
   "TiDB is fragile on startup; processes love to crash if they can't complete
@@ -358,6 +395,14 @@
                       (cu/daemon-running? db-pid-file)  :starting
                       true                              :crashed)))
 
+(defn start-wait-system-db!
+  "Starts SYSTEM TiDB, waiting for its health page to come online."
+  [test node]
+  (restart-loop :system-db (start-system-db! test node)
+                (cond (system-db-ready?)                       :ready
+                      (cu/daemon-running? system-db-pid-file)  :starting
+                      true                                     :crashed)))
+
 (defn stop-pd-service! [test node svc]
   (c/su
     (cu/stop-daemon! (get-in pd-services [svc :bin]) (get-in pd-services [svc :pid-file]))
@@ -377,12 +422,19 @@
 (defn stop-kv! [test node] (c/su (cu/stop-daemon! kv-bin kv-pid-file)
                                  (cu/grepkill! kv-bin)))
 
+(defn stop-system-db! [test node]
+  (c/su
+    (cu/stop-daemon! db-bin system-db-pid-file)
+    (cu/grepkill! db-bin)))
+
 (defn stop-db! [test node] (c/su (cu/stop-daemon! db-bin db-pid-file)
                                  (cu/grepkill! db-bin)))
 
 (defn stop!
   "Stops all daemons"
   [test node]
+  (when (:enable-system-tidb test)
+    (stop-system-db! test node))
   (stop-db! test node)
   (stop-kv! test node)
   (stop-pd! test node))
@@ -479,79 +531,92 @@
   []
   (reify db/DB
     (setup! [_ test node]
-      (info node "resetting TiDB")
-      (c/su
-        (stop! test node)
-        (try+ (->> (cu/ls tidb-dir)
-                   (remove #{"bin"})
-                   (map (partial str tidb-dir "/"))
-                   (c/exec :rm :-rf))
-              (catch [:type :jepsen.control/nonzero-exit, :exit 2] e
-                 ; No such dir
-                nil)))
-      (c/su
-        (install! test node)
-        (configure!)
-        (jepsen/synchronize test 180)
+      (let [enable-system? (:enable-system-tidb test)]
+        (info node "resetting TiDB")
+        (c/su
+          (stop! test node)
+          (try+ (->> (cu/ls tidb-dir)
+                     (remove #{"bin"})
+                     (map (partial str tidb-dir "/"))
+                     (c/exec :rm :-rf))
+                (catch [:type :jepsen.control/nonzero-exit, :exit 2] e
+                   ; No such dir
+                  nil)))
+        (c/su
+          (install! test node)
+          (configure!)
+          (when enable-system?
+            (configure-system-db!))
+          (jepsen/synchronize test 180)
 
-        (try+ (start-wait-pd! test node)
-              ; If we don't synchronize, KV might explode because PD isn't
-              ; fully available
-              (jepsen/synchronize test)
-              (Thread/sleep 5000)
+          (try+ (start-wait-pd! test node)
+                ; If we don't synchronize, KV might explode because PD isn't
+                ; fully available
+                (jepsen/synchronize test)
+                (Thread/sleep 5000)
 
-              (start-wait-kv! test node)
-              (jepsen/synchronize test)
+                (start-wait-kv! test node)
+                (jepsen/synchronize test)
 
-              ; We have to wait for every region to become totally replicated
-              ; before starting TiDB: if we start TiDB first, it might take 80+
-              ; minutes to converge.
-              (wait-for-replica-count node)
-              (jepsen/synchronize test)
+                ; We have to wait for every region to become totally replicated
+                ; before starting any TiDB instance: if we start TiDB first, it
+                ; might take 80+ minutes to converge.
+                (wait-for-replica-count node)
+                (jepsen/synchronize test)
 
-              (Thread/sleep 5000)
+                (Thread/sleep 5000)
 
-              ; OK, now we can start TiDB itself
-              (start-wait-db! test node)
+                (when enable-system?
+                  (start-wait-system-db! test node)
+                  (jepsen/synchronize test)
+                  (Thread/sleep 10000))
 
-              (Thread/sleep 30000)
+                ; OK, now we can start the primary TiDB itself
+                (start-wait-db! test node)
 
-              ; For reasons I cannot explain, sometimes TiDB just... fails to
-              ; reach a usable state despite waiting hundreds of seconds to
-              ; open a connection. I've lowered the await-node timeout, and if
-              ; we fail here, we'll nuke the entire setup process and try
-              ; again. <sigh>
-              (sql/await-node node)
+                (Thread/sleep 30000)
 
-              (catch [:type :gave-up-waiting-for-replica-count] e
-                (throw+ {:type :jepsen.db/setup-failed}))
+                ; For reasons I cannot explain, sometimes TiDB just... fails to
+                ; reach a usable state despite waiting hundreds of seconds to
+                ; open a connection. I've lowered the await-node timeout, and if
+                ; we fail here, we'll nuke the entire setup process and try
+                ; again. <sigh>
+                (sql/await-node node)
 
-              (catch [:type :restart-loop-timed-out] e
-                (throw+ {:type :jepsen.db/setup-failed}))
+                (catch [:type :gave-up-waiting-for-replica-count] e
+                  (throw+ {:type :jepsen.db/setup-failed}))
 
-              (catch [:type :connect-timed-out] e
-                ; sigh
-                (throw+ {:type :jepsen.db/setup-failed}))
+                (catch [:type :restart-loop-timed-out] e
+                  (throw+ {:type :jepsen.db/setup-failed}))
 
-              (catch java.sql.SQLException e
-                ; siiiiiiiigh
-                (throw+ {:type :jepsen.db/setup-failed})))))
+                (catch [:type :connect-timed-out] e
+                  ; sigh
+                  (throw+ {:type :jepsen.db/setup-failed}))
+
+                (catch java.sql.SQLException e
+                  ; siiiiiiiigh
+                  (throw+ {:type :jepsen.db/setup-failed}))))))
 
     (teardown! [_ test node])
 
     db/LogFiles
     (log-files [_ test node]
       (when-not (:skip-collect-logs test)
-        (concat [db-log-file
-                 db-slow-file
-                 db-stdout
-                 kv-log-file
-                 kv-stdout]
-                (if (:pd-services test)
-                  [(get-in pd-services [:api :log-file])
-                   (get-in pd-services [:api :stdout])
-                   (get-in pd-services [:tso :log-file])
-                   (get-in pd-services [:tso :stdout])
-                   (get-in pd-services [:scheduling :log-file])
-                   (get-in pd-services [:scheduling :stdout])]
-                  [pd-log-file pd-stdout]))))))
+        (let [base (cond-> [db-log-file
+                            db-slow-file
+                            db-stdout
+                            kv-log-file
+                            kv-stdout]
+                     (:enable-system-tidb test)
+                     (into [system-db-log-file
+                            system-db-slow-file
+                            system-db-stdout]))
+              pd-logs (if (:pd-services test)
+                        [(get-in pd-services [:api :log-file])
+                         (get-in pd-services [:api :stdout])
+                         (get-in pd-services [:tso :log-file])
+                         (get-in pd-services [:tso :stdout])
+                         (get-in pd-services [:scheduling :log-file])
+                         (get-in pd-services [:scheduling :stdout])]
+                        [pd-log-file pd-stdout])]
+          (concat base pd-logs))))))
