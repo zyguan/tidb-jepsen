@@ -10,20 +10,35 @@
   [i]
   (str "txn" i))
 
+(defn index-name
+  "Takes an integer and constructs a index name."
+  [i]
+  (str (table-name i) "_sk_val"))
+
 (defn table-for
   "What table should we use for the given key?"
   [table-count k]
   (table-name (mod (hash k) table-count)))
 
+(defn index-for
+  "What index name is for the given key?" 
+  [table-count k] 
+  (index-name (mod (hash k) table-count)))
+
 (defn mop!
   "Executes a transactional micro-op on a connection. Returns the completed
   micro-op."
   [conn test table-count [f k v]]
-  (let [table (table-for table-count k)]
+  (let [table (table-for table-count k) index (index-for table-count k)]
     [f k (case f
            :r (-> conn
-                  (c/query [(str "select val from " table " where "
+                  (c/query [(str "select " 
+                                 (if (:index-lookup-pushdown test) 
+                                   (str "/*+ index_lookup_pushdown(" table ", " index ") */ val, val2")
+                                   "val")
+                                 " from " table " where "
                                  (if (or (:use-index test)
+                                         (:index-lookup-pushdown test)
                                          (:predicate-read test))
                                    "sk"
                                    "id")
@@ -91,8 +106,9 @@
         (c/execute! conn [(str "create table if not exists " (table-name i)
                                " (id  int not null primary key,
                                sk  int not null,
-                               val " val-type ")")])
-        (when (:use-index test)
+                               val " val-type 
+                               " val2 int default 1024)")])
+        (when (or (:use-index test) (:index-lookup-pushdown test))
           (c/create-index! conn [(str "create index " (table-name i) "_sk_val on " (table-name i)
                                       " (sk, val" (when (= val-type "text") "(256)") ")")]))
         (when (:table-cache test)

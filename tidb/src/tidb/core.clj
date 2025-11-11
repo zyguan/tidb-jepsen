@@ -60,37 +60,40 @@
 (def workload-options
   "For each workload, a map of workload options to all values that option
   supports."
-  {:append          {:auto-retry        [true false]
-                     :auto-retry-limit  [10 0]
-                     :read-lock         [nil "FOR UPDATE"]
-                     :predicate-read    [true false]}
-   :bank            {:auto-retry        [true false]
-                     :auto-retry-limit  [10 0]
-                     :update-in-place   [true false]
-                     :read-lock         [nil "FOR UPDATE"]}
-   :bank-multitable {:auto-retry        [true false]
-                     :auto-retry-limit  [10 0]
-                     :update-in-place   [true false]
-                     :read-lock         [nil "FOR UPDATE"]}
-   :comments        {:auto-retry        [true false]
-                     :auto-retry-limit  [10 0]}
-   :long-fork       {:auto-retry        [true false]
-                     :auto-retry-limit  [10 0]
-                     :use-index         [true false]}
-   :monotonic       {:auto-retry        [true false]
-                     :auto-retry-limit  [10 0]
-                     :use-index         [true false]}
-   :register        {:auto-retry        [true false]
-                     :auto-retry-limit  [10 0]
-                     :read-lock         [nil "FOR UPDATE"]
-                     :use-index         [true false]}
-   :set             {:auto-retry        [true false]
-                     :auto-retry-limit  [10 0]}
-   :set-cas         {:auto-retry        [true false]
-                     :auto-retry-limit  [10 0]
-                     :read-lock         [nil "FOR UPDATE"]}
-   :sequential      {:auto-retry        [true false]
-                     :auto-retry-limit  [10 0]}
+  {:append          {:auto-retry            [true false]
+                     :auto-retry-limit      [10 0]
+                     :read-lock             [nil "FOR UPDATE"]
+                     :predicate-read        [true false]}
+   :bank            {:auto-retry            [true false]
+                     :auto-retry-limit      [10 0]
+                     :update-in-place       [true false]
+                     :read-lock             [nil "FOR UPDATE"]}
+   :bank-multitable {:auto-retry            [true false]
+                     :auto-retry-limit      [10 0]
+                     :update-in-place       [true false]
+                     :read-lock             [nil "FOR UPDATE"]}
+   :comments        {:auto-retry            [true false]
+                     :auto-retry-limit      [10 0]}
+   :long-fork       {:auto-retry            [true false]
+                     :auto-retry-limit      [10 0]
+                     :use-index             [true false]
+                     :index-lookup-pushdown [true false]}
+   :monotonic       {:auto-retry            [true false]
+                     :auto-retry-limit      [10 0]
+                     :use-index             [true false]
+                     :index-lookup-pushdown [true false]}
+   :register        {:auto-retry            [true false]
+                     :auto-retry-limit      [10 0]
+                     :read-lock             [nil "FOR UPDATE"]
+                     :use-index             [true false] 
+                     :index-lookup-pushdown [true false]}
+   :set             {:auto-retry            [true false]
+                     :auto-retry-limit      [10 0]}
+   :set-cas         {:auto-retry            [true false]
+                     :auto-retry-limit      [10 0]
+                     :read-lock             [nil "FOR UPDATE"]}
+   :sequential      {:auto-retry            [true false]
+                     :auto-retry-limit      [10 0]}
    :table           {}})
 
 (def workload-options-expected-to-pass
@@ -325,6 +328,8 @@
                     " predicate-read")
                   (when (:use-index opts)
                     " use-index")
+                  (when (:index-lookup-pushdown opts)
+                    " index-lookup-pushdown")
                   (when (:txn-mode opts)
                     (str " txn-mode " (:txn-mode opts)))
                   (when (:isolation opts)
@@ -400,6 +405,9 @@
     :validate [pos? "should be a positive number"]]
 
    [nil "--force-reinstall" "Don't re-use an existing TiDB directory"]
+
+   [nil "--enable-system-tidb" "Start a dedicated SYSTEM keyspace TiDB alongside the primary instance."
+    :default false]
 
    [nil "--nemesis-interval SECONDS"
     "Roughly how long to wait between nemesis operations. Default: 10s."
@@ -523,6 +531,9 @@
     :default false]
 
    ["-i" "--use-index" "Whether to use indices, or read by primary key"
+    :default false]
+   
+   [nil, "--index-lookup-pushdown" "Whether to use the index and push down the index look up"
     :default false]
 
    ["-w" "--workload NAME" "Test workload to run"
