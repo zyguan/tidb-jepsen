@@ -23,10 +23,11 @@
   ([c test k]
    (read-key c test k false))
   ([c test k lock?]
-   (-> (c/query c [(str "select " 
-                        (if (:index-lookup-pushdown test) "/*+ index_lookup_pushdown(cycle, cycle_sk_val) */ val, val2" "(val)") 
-                        " from cycle where "
-                        (if (or (:use-index test) (:index-lookup-pushdown test)) "sk" "pk") " = ?" (when lock? " for update"))
+   (-> (c/query c [(str "select "
+                        (when (:index-lookup test)
+                          "/*+ index_lookup_pushdown(cycle, cycle_sk) */")
+                        "(val) from cycle where "
+                        (if (:use-index test) "sk" "pk") " = ?" (when lock? " for update"))
                    k])
        first
        (:val -1))))
@@ -41,7 +42,7 @@
 
 (defn single-stmt-inc! [conn op]
   (let [k (:value op)
-        q (str "insert into cycle values (?, ?, 0, 1024) "
+        q (str "insert into cycle values (?, ?, 0) "
                "on duplicate key update val = values(val)+1")]
     (c/execute! conn [q k k] {:transaction? false})
     (assoc op :type :ok, :value {})))
@@ -56,10 +57,11 @@
       (c/execute! conn ["create table if not exists cycle
                         (pk  int not null primary key,
                          sk  int not null,
-                         val int,
-                         val2 int)"])
-      (when (or (:use-index test) (:index-lookup-pushdown test))
-        (c/create-index! conn ["create index cycle_sk_val on cycle (sk, val)"]))
+                         val int)"])
+      (when (:use-index test)
+        (c/create-index! conn [(str "create index cycle_sk on cycle (sk"
+                                    (when-not (:index-lookup test) ", val")
+                                    ")")]))
       (when (:table-cache test)
         (c/execute! conn ["alter table cycle cache"]))))
 
@@ -88,7 +90,7 @@
                      (if (= -1 v)
                        (c/insert! c "cycle" {:pk k, :sk k, :val 0})
                        (c/update! c "cycle" {:val (inc v)},
-                                  [(str (if (or (:use-index test) (:index-lookup-pushdown test)) "sk" "pk") " = ?")
+                                  [(str (if (:use-index test) "sk" "pk") " = ?")
                                    k]))
                      ; The monotonic value constraint isn't actually enough to
                      ; capture all the ordering dependencies here: an increment

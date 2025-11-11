@@ -10,35 +10,22 @@
   [i]
   (str "txn" i))
 
-(defn index-name
-  "Takes an integer and constructs a index name."
-  [i]
-  (str (table-name i) "_sk_val"))
-
 (defn table-for
   "What table should we use for the given key?"
   [table-count k]
   (table-name (mod (hash k) table-count)))
 
-(defn index-for
-  "What index name is for the given key?" 
-  [table-count k] 
-  (index-name (mod (hash k) table-count)))
-
 (defn mop!
   "Executes a transactional micro-op on a connection. Returns the completed
   micro-op."
   [conn test table-count [f k v]]
-  (let [table (table-for table-count k) index (index-for table-count k)]
+  (let [table (table-for table-count k)
+        hint  (when (:index-lookup test)
+                (str "/*+ index_lookup_pushdown(" table ", " table "_sk) */"))]
     [f k (case f
            :r (-> conn
-                  (c/query [(str "select " 
-                                 (if (:index-lookup-pushdown test) 
-                                   (str "/*+ index_lookup_pushdown(" table ", " index ") */ val, val2")
-                                   "val")
-                                 " from " table " where "
+                  (c/query [(str "select " hint "val from " table " where "
                                  (if (or (:use-index test)
-                                         (:index-lookup-pushdown test)
                                          (:predicate-read test))
                                    "sk"
                                    "id")
@@ -56,11 +43,11 @@
 
            :append
            (let [r (c/execute!
-                     conn
-                     [(str "insert into " table
-                           " (id, sk, val) values (?, ?, ?)"
-                           " on duplicate key update val = CONCAT(val, ',', ?)")
-                      k k (str v) (str v)])]
+                    conn
+                    [(str "insert into " table
+                          " (id, sk, val) values (?, ?, ?)"
+                          " on duplicate key update val = CONCAT(val, ',', ?)")
+                     k k (str v) (str v)])]
              v))]))
 
 (defn txn-type [test table-count txn]
@@ -106,11 +93,11 @@
         (c/execute! conn [(str "create table if not exists " (table-name i)
                                " (id  int not null primary key,
                                sk  int not null,
-                               val " val-type 
-                               " val2 int default 1024)")])
-        (when (or (:use-index test) (:index-lookup-pushdown test))
-          (c/create-index! conn [(str "create index " (table-name i) "_sk_val on " (table-name i)
-                                      " (sk, val" (when (= val-type "text") "(256)") ")")]))
+                               val " val-type ")")])
+        (when (:use-index test)
+          (c/create-index! conn [(str "create index " (table-name i) "_sk on " (table-name i) " (sk"
+                                      (when-not (:index-lookup test) (str ", val" (when (= val-type "text") "(256)")))
+                                      ")")]))
         (when (:table-cache test)
           (c/execute! conn [(str "alter table " (table-name i) " cache")])))))
 

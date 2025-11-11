@@ -48,8 +48,6 @@
 (def system-db-pid-file    (str tidb-dir "/system-db.pid"))
 (def system-db-port        14000)
 (def system-db-status-port 11080)
-(def go-failpoints-env
-  {:GO_FAILPOINTS "github.com/pingcap/tidb/pkg/server/enableTestAPI=return;github.com/pingcap/tidb/server/enableTestAPI=return"})
 (def pd-services
   {:api
    {:bin "pd-api"
@@ -233,7 +231,9 @@
      (cu/start-daemon!
       {:logfile pd-stdout
        :pidfile pd-pid-file
-       :chdir   tidb-dir}
+       :chdir   tidb-dir
+       :env {:GO_FAILPOINTS (-> (System/getenv) (get "PD_FAILPOINTS" ""))}
+       }
       (str "./bin/" pd-bin)
       :--name                  (get-in (tidb-map test) [node :pd])
       :--data-dir              pd-data-dir
@@ -253,6 +253,7 @@
       {:logfile kv-stdout
        :pidfile kv-pid-file
        :chdir   tidb-dir
+       :env {:FAILPOINTS (-> (System/getenv) (get "KV_FAILPOINTS" ""))}
        }
       (str "./bin/" kv-bin)
       :--pd                    (pd-endpoints test)
@@ -271,7 +272,7 @@
       {:logfile db-stdout
        :pidfile db-pid-file
        :chdir   tidb-dir
-       :env     go-failpoints-env
+       :env {:GO_FAILPOINTS (-> (System/getenv) (get "DB_FAILPOINTS" ""))}
        }
       (str "./bin/" db-bin)
       :--store     (str "tikv")
@@ -287,7 +288,8 @@
       {:logfile system-db-stdout
        :pidfile system-db-pid-file
        :chdir   tidb-dir
-       :env     go-failpoints-env}
+       :env     {:GO_FAILPOINTS (-> (System/getenv) (get "DB_FAILPOINTS" ""))}
+       }
       (str "./bin/" db-bin)
       :--store          (str "tikv")
       :--path           (pd-endpoints test)
@@ -354,7 +356,7 @@
         (start!))
 
       ; Give it a bit
-      (Thread/sleep 1000)
+      (Thread/sleep 10000)
 
       ; OK, how's it doing?
       (let [status (get-status)]
@@ -469,6 +471,10 @@
       (info node "installing TiDB")
       (info (tarball-url test))
       (cu/install-archive! (tarball-url test) tidb-dir)
+      (doseq [url (:binary-urls test)]
+        (info "Downloading additional binary from" url)
+        (let [f (cu/cached-wget! url)]
+          (c/exec :tar :-xf f :-C tidb-bin-dir)))
       ; Some tarballs place binaries directly in tidb-dir instead of tidb/bin.
       ; Ensure a consistent ./bin layout by creating symlinks when needed.
       (when (not (cu/exists? tidb-bin-dir))
