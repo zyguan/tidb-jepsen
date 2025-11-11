@@ -21,10 +21,10 @@
 (defn read
   "Reads the current value of a key."
   [conn test k]
-  (:val (first (c/query conn [(str "select " 
-                                   (if (:index-lookup-pushdown test) "/*+ index_lookup_pushdown(test, test_sk_val) */ val, val2" "(val)")
-                                   " from test where "
-                                   (if (or (:use-index test) (:index-lookup-pushdown test)) "sk" "id") " = ? "
+  (:val (first (c/query conn [(str "select "
+                                   (when (:index-lookup test) "/*+ index_lookup_pushdown(test, test_sk) */")
+                                   " (val) from test where "
+                                   (if (:use-index test) "sk" "id") " = ? "
                                    (:read-lock test))
                               k]))))
 
@@ -39,10 +39,11 @@
       (c/execute! conn ["create table if not exists test
                         (id   int primary key,
                          sk   int,
-                         val  int,
-                         val2 int default 1024)"])
-      (when (or (:use-index test) (:index-lookup-pushdown test))
-        (c/create-index! conn ["create index test_sk_val on test (sk, val)"]))
+                         val  int)"])
+      (when (:use-index test)
+        (c/create-index! conn [(str "create index test_sk on test (sk"
+                                    (when-not (:index-lookup test) ", val")
+                                    ")")]))
       (when (:table-cache test)
         (c/execute! conn ["alter table test cache"]))))
 

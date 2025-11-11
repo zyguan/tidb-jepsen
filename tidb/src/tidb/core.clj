@@ -77,16 +77,16 @@
    :long-fork       {:auto-retry            [true false]
                      :auto-retry-limit      [10 0]
                      :use-index             [true false]
-                     :index-lookup-pushdown [true false]}
+                     :index-lookup          [true false]}
    :monotonic       {:auto-retry            [true false]
                      :auto-retry-limit      [10 0]
                      :use-index             [true false]
-                     :index-lookup-pushdown [true false]}
+                     :index-lookup          [true false]}
    :register        {:auto-retry            [true false]
                      :auto-retry-limit      [10 0]
                      :read-lock             [nil "FOR UPDATE"]
-                     :use-index             [true false] 
-                     :index-lookup-pushdown [true false]}
+                     :use-index             [true false]
+                     :index-lookup          [true false]}
    :set             {:auto-retry            [true false]
                      :auto-retry-limit      [10 0]}
    :set-cas         {:auto-retry            [true false]
@@ -328,8 +328,8 @@
                     " predicate-read")
                   (when (:use-index opts)
                     " use-index")
-                  (when (:index-lookup-pushdown opts)
-                    " index-lookup-pushdown")
+                  (when (:index-lookup opts)
+                    " index-lookup")
                   (when (:txn-mode opts)
                     (str " txn-mode " (:txn-mode opts)))
                   (when (:isolation opts)
@@ -532,8 +532,8 @@
 
    ["-i" "--use-index" "Whether to use indices, or read by primary key"
     :default false]
-   
-   [nil, "--index-lookup-pushdown" "Whether to use the index and push down the index look up"
+
+   [nil, "--index-lookup" "Whether to use the index-lookup, by default index-scan will be used when --use-index is specified"
     :default false]
 
    ["-w" "--workload NAME" "Test workload to run"
