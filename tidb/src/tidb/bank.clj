@@ -17,12 +17,27 @@
    :to     [to (- b2 amount) b2]
    :amount amount})
 
-(defn single-stmt-transfer! [conn op]
+(defn create-bank-records-table! [conn]
+  (c/execute! conn ["create table if not exists bank_records
+                    (id         bigint not null auto_increment primary key,
+                     account_id int    not null,
+                     amount     bigint not null,
+                     foreign key (account_id) references accounts(id))"]))
+
+(defn insert-bank-record! [conn {:keys [from to amount]}]
+  (c/execute! conn ["insert into bank_records(account_id, amount) values (?, ?), (?, ?)"
+                    from (- amount)
+                    to amount]
+              {:transaction? false}))
+
+(defn single-stmt-transfer! [conn test op]
   (let [{:keys [from to amount]} (:value op)]
     (c/execute! conn
                 ["update accounts set balance = balance + if(id=?,-?,?) where id=? or (id=? and 1/if(balance>=?,1,0))"
                  from amount amount to from amount]
                 {:transaction? false})
+    ;; (when (:test-foreign-key test)
+    ;;   (insert-bank-record! conn {:from from :to to :amount amount}))
     (attach-txn-info conn (assoc op :type :ok))))
 
 (defrecord BankClient [conn tbl-created?]
@@ -35,6 +50,8 @@
     ; requests per second; let's try to make its life easier
     (when (compare-and-set! tbl-created? false true)
       (c/with-conn-failure-retry conn
+        (when (:test-foreign-key test)
+          (c/execute! conn ["drop table if exists bank_records"]))
         (c/execute! conn ["drop table if exists accounts"])
         (c/execute! conn ["create table if not exists accounts
                           (id     int not null primary key,
@@ -54,7 +71,9 @@
                                          :balance (if (= a (first (:accounts test)))
                                                     (:total-amount test)
                                                     0)}))
-            (catch java.sql.SQLIntegrityConstraintViolationException e nil))))))
+            (catch java.sql.SQLIntegrityConstraintViolationException e nil)))
+        (when (:test-foreign-key test)
+          (create-bank-records-table! conn)))))
 
   (invoke! [this test op]
     (if (and (= :transfer (:f op)) (:single-stmt-write test))
@@ -63,10 +82,15 @@
                             :before-hook (partial c/rand-init-txn! test conn)}]
         (try
           (case (:f op)
-            :read (->> (c/query c [(str "select * from accounts")])
-                       (map (juxt :id :balance))
-                       (into (sorted-map))
-                       (assoc op :type :ok, :value))
+            :read (let [accounts (->> (c/query c [(str "select * from accounts")])
+                                      (map (juxt :id :balance))
+                                      (into (sorted-map)))
+                        total-amount (when (:test-foreign-key test)
+                                       (->> (c/query c ["select sum(amount) as total_amount from bank_records"]
+                                                     {:row-fn :total_amount})
+                                            first))]
+                    (cond-> (assoc op :type :ok, :value accounts)
+                      (:test-foreign-key test) (assoc :total-amount total-amount)))
 
             :transfer
             (let [{:keys [from to amount]} (:value op)
@@ -91,9 +115,15 @@
                     (if (:update-in-place test)
                       (do (c/execute! c ["update accounts set balance = balance - ? where id = ?" amount from])
                           (c/execute! c ["update accounts set balance = balance + ? where id = ?" amount to])
+                          (when (:test-foreign-key test) (with-txn op [c conn {:isolation (util/isolation-level test)
+                            :before-hook (partial c/rand-init-txn! test conn)}]
+                            (insert-bank-record! c {:from from :to to :amount amount})))
                           (assoc op :type :ok :value (transfer_value from to b1 b2 amount)))
                       (do (c/update! c :accounts {:balance b1} ["id = ?" from])
                           (c/update! c :accounts {:balance b2} ["id = ?" to])
+                          (when (:test-foreign-key test) (with-txn op [c conn {:isolation (util/isolation-level test)
+                            :before-hook (partial c/rand-init-txn! test conn)}]
+                            (insert-bank-record! c {:from from :to to :amount amount})))
                           (assoc op :type :ok :value (transfer_value from to b1 b2 amount)))))))))))
 
   (teardown! [_ test])
