@@ -48,6 +48,7 @@
   numbers mean more egregious errors."
   [test err]
   (case (:type err)
+    :non-zero-total-moved (Math/abs (float (:total-moved err)))
     :unexpected-key (count (:unexpected err))
     :nil-balance    (count (:nils err))
     :wrong-total    (Math/abs (float (/ (- (:total err) (:total-amount test))
@@ -57,8 +58,9 @@
 (defn check-op
   "Takes a single op and returns errors in its balance"
   [accts total negative-balances? op]
-  (let [ks       (keys (:value op))
-        balances (vals (:value op))]
+  (let [ks          (keys (:value op))
+        balances    (vals (:value op))
+        total-moved (or (:total-moved op) 0)]
     (cond (not-every? accts ks)
           {:type        :unexpected-key
            :unexpected  (remove accts ks)
@@ -75,6 +77,11 @@
           {:type     :wrong-total
            :total    (reduce + balances)
            :op       op}
+
+          (not (zero? total-moved))
+          {:type        :non-zero-total-moved
+           :total-moved total-moved
+           :op          op}
 
           (and (not negative-balances?) (some neg? balances))
           {:type     :negative-value

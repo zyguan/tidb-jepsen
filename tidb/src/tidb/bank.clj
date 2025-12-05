@@ -18,14 +18,14 @@
    :amount amount})
 
 (defn create-bank-records-table! [conn]
-  (c/execute! conn ["create table if not exists bank_records
+  (c/execute! conn ["create table if not exists records
                     (id         bigint not null auto_increment primary key,
                      account_id int    not null,
                      amount     bigint not null,
                      foreign key (account_id) references accounts(id))"]))
 
 (defn insert-bank-record! [conn {:keys [from to amount]}]
-  (c/execute! conn ["insert into bank_records(account_id, amount) values (?, ?), (?, ?)"
+  (c/execute! conn ["insert into records(account_id, amount) values (?, ?), (?, ?)"
                     from (- amount)
                     to amount]
               {:transaction? false}))
@@ -51,7 +51,7 @@
     (when (compare-and-set! tbl-created? false true)
       (c/with-conn-failure-retry conn
         (when (:test-foreign-key test)
-          (c/execute! conn ["drop table if exists bank_records"]))
+          (c/execute! conn ["drop table if exists records"]))
         (c/execute! conn ["drop table if exists accounts"])
         (c/execute! conn ["create table if not exists accounts
                           (id     int not null primary key,
@@ -78,53 +78,54 @@
   (invoke! [this test op]
     (if (and (= :transfer (:f op)) (:single-stmt-write test))
       (with-error-handling op (single-stmt-transfer! conn op))
-      (with-txn op [c conn {:isolation (util/isolation-level test)
-                            :before-hook (partial c/rand-init-txn! test conn)}]
-        (try
-          (case (:f op)
-            :read (let [accounts (->> (c/query c [(str "select * from accounts")])
-                                      (map (juxt :id :balance))
-                                      (into (sorted-map)))
-                        total-amount (when (:test-foreign-key test)
-                                       (->> (c/query c ["select sum(amount) as total_amount from bank_records"]
-                                                     {:row-fn :total_amount})
-                                            first))]
-                    (cond-> (assoc op :type :ok, :value accounts)
-                      (:test-foreign-key test) (assoc :total-amount total-amount)))
+      (do
+        (when (and (= :transfer (:f op)) (:test-foreign-key test))
+          (with-txn op [c conn {:isolation (util/isolation-level test)
+                                :before-hook (partial c/rand-init-txn! test conn)}]
+                                (let [{:keys [from to amount]} (:value op)]
+                                  (insert-bank-record! c {:from from :to to :amount amount}))))
 
-            :transfer
-            (let [{:keys [from to amount]} (:value op)
-                  b1 (-> c
-                         (c/query [(str "select * from accounts where id = ? "
-                                        (:read-lock test)) from]
-                                  {:row-fn :balance})
-                         first
-                         (- amount))
-                  b2 (-> c
-                         (c/query [(str "select * from accounts where id = ? "
-                                        (:read-lock test))
-                                   to]
-                                  {:row-fn :balance})
-                         first
-                         (+ amount))]
-              (cond (neg? b1)
-                    (assoc op :type :fail, :value [:negative from b1])
-                    (neg? b2)
-                    (assoc op :type :fail, :value [:negative to b2])
-                    true
-                    (if (:update-in-place test)
-                      (do (c/execute! c ["update accounts set balance = balance - ? where id = ?" amount from])
-                          (c/execute! c ["update accounts set balance = balance + ? where id = ?" amount to])
-                          (when (:test-foreign-key test) (with-txn op [c conn {:isolation (util/isolation-level test)
+        (with-txn op [c conn {:isolation (util/isolation-level test)
                             :before-hook (partial c/rand-init-txn! test conn)}]
-                            (insert-bank-record! c {:from from :to to :amount amount})))
-                          (assoc op :type :ok :value (transfer_value from to b1 b2 amount)))
-                      (do (c/update! c :accounts {:balance b1} ["id = ?" from])
-                          (c/update! c :accounts {:balance b2} ["id = ?" to])
-                          (when (:test-foreign-key test) (with-txn op [c conn {:isolation (util/isolation-level test)
-                            :before-hook (partial c/rand-init-txn! test conn)}]
-                            (insert-bank-record! c {:from from :to to :amount amount})))
-                          (assoc op :type :ok :value (transfer_value from to b1 b2 amount)))))))))))
+          (try
+            (case (:f op)
+              :read (let [accounts (->> (c/query c [(str "select * from accounts")])
+                                        (map (juxt :id :balance))
+                                        (into (sorted-map)))
+                          total-moved (when (:test-foreign-key test)
+                                        (->> (c/query c ["select sum(amount) as total_moved from records"]
+                                                      {:row-fn :total_moved})
+                                              first))]
+                      (cond-> (assoc op :type :ok, :value accounts)
+                        (:test-foreign-key test) (assoc :total-moved total-moved)))
+
+              :transfer
+              (let [{:keys [from to amount]} (:value op)
+                    b1 (-> c
+                          (c/query [(str "select * from accounts where id = ? "
+                                          (:read-lock test)) from]
+                                    {:row-fn :balance})
+                          first
+                          (- amount))
+                    b2 (-> c
+                          (c/query [(str "select * from accounts where id = ? "
+                                          (:read-lock test))
+                                    to]
+                                    {:row-fn :balance})
+                          first
+                          (+ amount))]
+                (cond (neg? b1)
+                      (assoc op :type :fail, :value [:negative from b1])
+                      (neg? b2)
+                      (assoc op :type :fail, :value [:negative to b2])
+                      true
+                      (if (:update-in-place test)
+                        (do (c/execute! c ["update accounts set balance = balance - ? where id = ?" amount from])
+                            (c/execute! c ["update accounts set balance = balance + ? where id = ?" amount to])
+                            (assoc op :type :ok :value (transfer_value from to b1 b2 amount)))
+                        (do (c/update! c :accounts {:balance b1} ["id = ?" from])
+                            (c/update! c :accounts {:balance b2} ["id = ?" to])
+                            (assoc op :type :ok :value (transfer_value from to b1 b2 amount))))))))))))
 
   (teardown! [_ test])
 
