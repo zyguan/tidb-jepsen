@@ -61,10 +61,13 @@
   (invoke! [this test op]
     (case (:f op)
       :write (let [[k id] (:value op)
-                   table (id->table table-count id)]
+                   table (id->table table-count id)
+                   single-stmt-write? (:single-stmt-write test)]
                (c/rand-init-txn! test conn)
+               (when single-stmt-write?
+                 (c/set-auto-commit! conn true))
                (c/insert! conn table {:id id, :tkey k}
-                          {:transaction? (not (:single-stmt-write test))})
+                          {:transaction? (not single-stmt-write?)})
                (c/attach-txn-info conn (assoc op :type :ok)))
 
       :read (with-txn op [c conn {:isolation (util/isolation-level test)}]
