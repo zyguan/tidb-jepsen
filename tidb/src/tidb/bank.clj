@@ -36,8 +36,6 @@
                 ["update accounts set balance = balance + if(id=?,-?,?) where id=? or (id=? and 1/if(balance>=?,1,0))"
                  from amount amount to from amount]
                 {:transaction? false})
-    ;; (when (:test-foreign-key test)
-    ;;   (insert-bank-record! conn {:from from :to to :amount amount}))
     (attach-txn-info conn (assoc op :type :ok))))
 
 (defrecord BankClient [conn tbl-created?]
