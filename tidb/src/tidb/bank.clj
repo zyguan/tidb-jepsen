@@ -76,15 +76,19 @@
   (invoke! [this test op]
     (if (and (= :transfer (:f op)) (:single-stmt-write test))
       (with-error-handling op (single-stmt-transfer! conn op))
-      (do
-        (when (and (= :transfer (:f op)) (:test-foreign-key test))
-          (with-txn op [c conn {:isolation (util/isolation-level test)
-                                :before-hook (partial c/rand-init-txn! test conn)}]
-                                (let [{:keys [from to amount]} (:value op)]
-                                  (insert-bank-record! c {:from from :to to :amount amount}))))
+      (let [op (if (and (= :transfer (:f op)) (:test-foreign-key test))
+                 (let [fk-op (with-txn op [c conn {:isolation (util/isolation-level test)
+                                                   :before-hook (partial c/rand-init-txn! test conn)}]
+                               (let [{:keys [from to amount]} (:value op)]
+                                 (insert-bank-record! c {:from from :to to :amount amount})
+                                 op))]
+                    ; the :txn-info from fk-op is attached as :fk-txn-info
+                    (cond-> op
+                      (:txn-info fk-op) (assoc :fk-txn-info (:txn-info fk-op)))) 
+                 op)]
 
         (with-txn op [c conn {:isolation (util/isolation-level test)
-                            :before-hook (partial c/rand-init-txn! test conn)}]
+                              :before-hook (partial c/rand-init-txn! test conn)}]
           (try
             (case (:f op)
               :read (let [accounts (->> (c/query c [(str "select * from accounts")])
