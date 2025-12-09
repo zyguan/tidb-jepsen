@@ -320,6 +320,8 @@
                     " auto-retry")
                   (when (not= 0 (:auto-retry-limit opts))
                     (str " auto-retry-limit " (:auto-retry-limit opts)))
+                  (when (:test-foreign-key opts)
+                    " foreign-key")
                   (when (:update-in-place opts)
                     " update-in-place")
                   (when (:read-lock opts)
@@ -510,6 +512,9 @@
     :default false]
 
    [nil "--pd-services" "If true, run pd as mutiple micro services."
+    :default false]
+
+   [nil "--test-foreign-key" "Enable bank foreign key path."
     :default false]
 
    [nil "--single-stmt-write", "If true, performs write operations in a single statement when possible."
