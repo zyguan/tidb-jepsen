@@ -38,7 +38,8 @@
 (def kv-data-dir    (str tidb-dir "/data/kv"))
 (def db-config-file (str tidb-dir "/db.conf"))
 (def db-log-file    (str tidb-dir "/db.log"))
-(def db-slow-file   (str tidb-dir "/slow.log"))
+(def db-slog-file   (str tidb-dir "/slow.log"))
+(def db-glog-file   (str tidb-dir "/general.log"))
 (def db-stdout      (str tidb-dir "/db.stdout"))
 (def db-pid-file    (str tidb-dir "/db.pid"))
 (def system-db-config-file (str tidb-dir "/system-db.conf"))
@@ -618,7 +619,8 @@
     (log-files [_ test node]
       (when-not (:skip-collect-logs test)
         (let [base (cond-> [db-log-file
-                            db-slow-file
+                            db-slog-file
+                            db-glog-file
                             db-stdout
                             kv-log-file
                             kv-stdout]

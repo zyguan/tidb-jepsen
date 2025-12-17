@@ -212,6 +212,48 @@
     (close! [this test]
       (client/close! client test))))
 
+(defn do-append-with-slock!
+  [conn [f k v]]
+  [f k
+   (case f
+     :r
+     (let [n (-> conn
+                 (c/query  ["select n from xlock where k = ?" k])
+                 first (:n 0))]
+       (if (> n 0)
+         (c/execute! conn ["insert into slock(k, tx) values (?, @@tidb_current_ts)" k])
+         (c/execute! conn ["insert into xlock(k, n) values (?, 0) on duplicate key update n=n" k]))
+       (mapv :v (c/query conn ["select v from item where k = ? order by n for update" k])))
+     :append
+     (let [n (-> conn
+                 (c/query ["select n from xlock where k = ? for update" k])
+                 first (:n 0) inc)]
+       (c/execute! conn ["replace into xlock(k, n) values (?, ?)" k n])
+       (c/execute! conn ["insert into item(k, v, n) values (?, ?, ?)" k v n])
+       v))])
+
+(defrecord AppendClientWithSLock [conn]
+  client/Client
+  (open! [this test node] (assoc this :conn (c/open node test)))
+  (close! [this test] (c/close! conn))
+
+  (setup!
+   [this test]
+   (c/with-conn-failure-retry conn
+     (c/execute! conn ["create table if not exists item (k int, v int, n int)"])
+     (c/execute! conn ["create table if not exists xlock (k int primary key, n int)"])
+     (c/execute! conn [(str "create table if not exists slock (k int, tx bigint, "
+                            "constraint fk_lock foreign key (k) references xlock(k) "
+                            "on delete cascade on update cascade)")])))
+  (invoke!
+    [this test op]
+    (c/with-txn op [c conn {:isolation (util/isolation-level test)
+                            :before-hook (partial c/rand-init-txn! test conn)}]
+      (assoc op :type :ok, :value
+             (mapv (partial do-append-with-slock! c) (:value op)))))
+
+  (teardown! [this test]))
+
 (defn append-txns
   "Like wr-txns, we just rewrite writes to be appends."
   [opts]
@@ -230,4 +272,16 @@
    :checker (append/checker {:anomalies         [(if (= :read-committed (:isolation opts)) :G1 :G-single)]
                              ; Jepsen may raise an IllegalStateException("Don't know how to classify") if a cycle only
                              ; consists of realtime edges and tso edges, which is typically caused by wrong tso info.
+                             :additional-graphs [cycle/realtime-graph]})})
+
+(defn append-slock-workload
+  [opts]
+  {:client (AppendClientWithSLock. nil)
+   :generator (->> (append-txns {:min-txn-length      1
+                                 :max-txn-length      4
+                                 :key-count           5
+                                 :max-writes-per-key  16})
+                   (map (fn [txn] {:type :invoke, :f :txn, :value txn}))
+                   gen/seq)
+   :checker (append/checker {:anomalies         [(if (= :read-committed (:isolation opts)) :G1 :G-single)]
                              :additional-graphs [cycle/realtime-graph]})})
