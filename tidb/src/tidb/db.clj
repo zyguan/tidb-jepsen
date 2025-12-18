@@ -357,7 +357,7 @@
         (start!))
 
       ; Give it a bit
-      (Thread/sleep 10000)
+      (Thread/sleep (if (= name :db) 20000 10000))
 
       ; OK, how's it doing?
       (let [status (get-status)]
@@ -577,7 +577,8 @@
                 ; We have to wait for every region to become totally replicated
                 ; before starting any TiDB instance: if we start TiDB first, it
                 ; might take 80+ minutes to converge.
-                (wait-for-replica-count node)
+                (when (>= (count (:nodes test)) 3)
+                  (wait-for-replica-count node))
                 (jepsen/synchronize test)
 
                 (Thread/sleep 5000)
