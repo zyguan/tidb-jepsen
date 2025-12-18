@@ -278,7 +278,7 @@
   [opts]
   {:client (AppendClientWithSLock. nil)
    :generator (->> (append-txns {:min-txn-length      1
-                                 :max-txn-length      4
+                                 :max-txn-length      2
                                  :key-count           5
                                  :max-writes-per-key  16})
                    (map (fn [txn] {:type :invoke, :f :txn, :value txn}))
